@@ -47,14 +47,10 @@ export function ResultsView({
           <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
           <p>
             <span className="font-medium">
-              We were blocked on {blockedCount}{" "}
-              {blockedCount === 1 ? "page" : "pages"}.
+              有 {blockedCount} 个页面阻止了抓取。
             </span>{" "}
             <span className="text-base-content/70">
-              The site's bot protection challenged our crawler, so those pages
-              couldn't be audited. We don't have a workaround for this yet.
-              Desktop crawlers run from your own machine and usually get past
-              it: try{" "}
+              网站的机器人防护拦截了爬虫，因此无法审计这些页面。目前还没有绕过办法。本机桌面爬虫通常能通过防护，可尝试{" "}
               <a
                 className="link link-primary"
                 href="https://github.com/PhialsBasement/LibreCrawl"
@@ -63,7 +59,7 @@ export function ResultsView({
               >
                 LibreCrawl
               </a>{" "}
-              (free, open source) or{" "}
+              （免费开源）或{" "}
               <a
                 className="link link-primary"
                 href="https://www.screamingfrog.co.uk/seo-spider/"
@@ -72,7 +68,7 @@ export function ResultsView({
               >
                 Screaming Frog
               </a>{" "}
-              (free up to 500 URLs).
+              （免费额度最多 500 个 URL）。
             </span>
           </p>
         </div>
@@ -192,13 +188,13 @@ function ResultsHeader({
   onExport: (format: "csv" | "json" | "sheets") => void;
 }) {
   const tabs: Array<{ tab: ResultsTab; label: string }> = [
-    { tab: "issues", label: `Issues (${issueCount})` },
-    { tab: "pages", label: `Pages (${pageCount})` },
+    { tab: "issues", label: `问题（${issueCount}）` },
+    { tab: "pages", label: `页面（${pageCount}）` },
     ...(hasPerformanceTab
       ? [
           {
             tab: "performance" as const,
-            label: `Performance (${lighthouseCount})`,
+            label: `性能（${lighthouseCount}）`,
           },
         ]
       : []),
@@ -264,9 +260,9 @@ function StatsStrip({
   }, [issues]);
 
   const items: StatItem[] = [
-    { label: "Pages crawled", value: String(pagesCrawled) },
+    { label: "已抓取页面", value: String(pagesCrawled) },
     {
-      label: "Issues found",
+      label: "发现问题",
       value: String(issues.length),
       valueClass: issues.length === 0 ? "text-success" : "",
       sub: issues.length > 0 && (
@@ -280,14 +276,14 @@ function StatsStrip({
         </span>
       ),
     },
-    { label: "Avg response", value: `${averageResponseMs}ms` },
+    { label: "平均响应时间", value: `${averageResponseMs}ms` },
   ];
 
   if (totalLighthouse > 0) {
     items.push(
-      { label: "Lighthouse tests", value: String(totalLighthouse) },
+      { label: "Lighthouse 测试", value: String(totalLighthouse) },
       {
-        label: "Avg Lighthouse perf",
+        label: "Lighthouse 平均性能",
         value:
           lighthouseSummary.avgPerformance == null
             ? "-"
@@ -295,7 +291,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgPerformance),
       },
       {
-        label: "Avg Lighthouse SEO",
+        label: "Lighthouse 平均 SEO",
         value:
           lighthouseSummary.avgSeo == null
             ? "-"
@@ -303,7 +299,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgSeo),
       },
       {
-        label: "Avg Lighthouse a11y",
+        label: "Lighthouse 平均无障碍",
         value:
           lighthouseSummary.avgAccessibility == null
             ? "-"
@@ -311,7 +307,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgAccessibility),
       },
       {
-        label: "Lighthouse failures",
+        label: "Lighthouse 失败次数",
         value: String(lighthouseSummary.failed),
         valueClass:
           lighthouseSummary.failed > 0 ? "text-error" : "text-success",

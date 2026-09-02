@@ -60,7 +60,7 @@ describe("parseResearchTarget", () => {
     const result = parseResearchTarget("example.com", "subfolder");
     expect(result).toEqual({
       ok: false,
-      message: "Add a path to use Subfolder (e.g. example.com/blog)",
+      message: "使用「目录」范围时请带上路径（例如 example.com/blog）",
     });
   });
 

@@ -39,37 +39,34 @@ export function BacklinksOverviewPanels({
           className="btn btn-ghost btn-sm gap-2 px-0 text-base-content/70 hover:bg-transparent"
         >
           <ArrowLeft className="size-4" />
-          Recent searches
+          最近搜索
         </Link>
       </div>
       <div className="flex flex-wrap items-center gap-2 text-sm text-base-content/65">
         <span className="badge badge-outline">
           {RESEARCH_SCOPE_LABELS[data.scope]}
         </span>
-        <span>Target: {data.displayTarget}</span>
+        <span>目标：{data.displayTarget}</span>
         <span>-</span>
-        <span>Updated {formatRelativeTimestamp(data.fetchedAt)}</span>
+        <span>更新时间 {formatRelativeTimestamp(data.fetchedAt)}</span>
         {/* history/live can't exclude subdomains, so say so rather than imply
             the charts match the domain-scoped totals. */}
         {data.scope === "domain" ? (
-          <span>- Trends include subdomains</span>
+          <span>- 趋势包含子域名</span>
         ) : null}
       </div>
       <OverviewGrid data={data} summaryStats={summaryStats} />
       {data.scope === "exact_url" ? (
         <div className="alert alert-info">
           <span>
-            Showing backlinks for this exact page. Switch the scope to Domain or
-            Subdomains for site-wide results — trend charts need one of those.
+            当前显示此精确页面的反向链接。将范围切换为「域名」或「含子域名」可查看全站结果；趋势图需要其中一种范围。
           </span>
         </div>
       ) : null}
       {data.scope === "subfolder" ? (
         <div className="alert alert-info">
           <span>
-            Showing backlinks pointing into this subfolder. Counts come from
-            filtered backlink totals; rank, trends, and the referring-domains
-            breakdown need Domain or Subdomains scope.
+            当前显示指向此目录的反向链接。计数来自筛选后的反向链接总量；排名、趋势和引荐域名明细需要「域名」或「含子域名」范围。
           </span>
         </div>
       ) : null}
@@ -132,15 +129,12 @@ function TrendPanels({ data }: { data: BacklinksOverviewData }) {
   return (
     <>
       <TrendCard
-        title="Backlink growth"
-        description="Backlinks and referring domains over the last year"
+        title="反向链接增长"
+        description="过去一年的反向链接和引用域名变化"
       >
         <BacklinksTrendChart data={data.trends} />
       </TrendCard>
-      <TrendCard
-        title="New vs lost"
-        description="Backlink acquisition and attrition"
-      >
+      <TrendCard title="新增与丢失" description="反向链接新增与流失情况">
         <BacklinksNewLostChart data={data.newLostTrends} />
       </TrendCard>
     </>

@@ -165,7 +165,7 @@ export function CitationTabsCard({
             className={`tab ${queriesActive ? "tab-active" : ""}`}
             onClick={() => setActiveTab("queries")}
           >
-            Queries
+            查询
           </button>
           <button
             type="button"
@@ -174,7 +174,7 @@ export function CitationTabsCard({
             className={`tab ${pagesActive ? "tab-active" : ""}`}
             onClick={() => setActiveTab("pages")}
           >
-            Cited sources
+            引用来源
           </button>
         </div>
 
@@ -185,7 +185,7 @@ export function CitationTabsCard({
             className={`btn btn-ghost btn-sm gap-1.5 ${canExport ? "" : "btn-disabled"}`}
           >
             <Download className="size-3.5" />
-            Export
+            导出
             <ChevronDown className="size-3.5" />
           </div>
           <ul
@@ -199,7 +199,7 @@ export function CitationTabsCard({
                 disabled={!canExport}
               >
                 <Sheet className="size-4" />
-                Google Sheets
+                Google 表格
               </button>
             </li>
             <li>
@@ -221,10 +221,10 @@ export function CitationTabsCard({
           type="button"
           className={`btn btn-ghost btn-sm gap-1.5 ${filters.showFilters ? "btn-active" : ""}`}
           onClick={() => filters.setShowFilters((current) => !current)}
-          title="Toggle table filters"
+          title="显示或隐藏表格筛选条件"
         >
           <SlidersHorizontal className="size-3.5" />
-          Filters
+          筛选
           {currentFilterCount > 0 ? (
             <span className="badge badge-xs badge-primary border-0 text-primary-content">
               {currentFilterCount}
@@ -237,21 +237,23 @@ export function CitationTabsCard({
         <span>
           {activeTab === "pages" ? (
             <>
-              {isUrlScoped ? "Cited pages within " : "Pages cited alongside "}
+              {isUrlScoped
+                ? "范围内被引用的页面 "
+                : "同时被引用的页面 "}
               <strong className="text-base-content/80">
                 {result.resolvedTarget}
               </strong>
-              {isUrlScoped ? "." : " in AI answers."} Prompt examples come from
-              the fetched sample.
+              {isUrlScoped ? "。" : " 出现在 AI 回答中。"}
+              提示词示例来自已获取的样本。
             </>
           ) : (
             <>
-              Fetched sample of prompts whose AI answer cited{" "}
-              {isUrlScoped ? "a page within " : null}
+              已获取的提示词样本，其 AI 回答引用了
+              {isUrlScoped ? "范围内的页面 " : " "}
               <strong className="text-base-content/80">
                 {result.resolvedTarget}
               </strong>
-              {isUrlScoped ? "." : " in its text or sources."}
+              {isUrlScoped ? "。" : " ，位置可能在正文或来源中。"}
             </>
           )}
         </span>
@@ -277,7 +279,7 @@ export function CitationTabsCard({
           // citations exist for that section.
           emptyMessage={
             isUrlScoped
-              ? `None of this domain's top cited pages fall under ${result.resolvedTarget}. Broaden the scope to see domain-level citations.`
+              ? `该域名的热门引用来源中，没有落在 ${result.resolvedTarget} 范围内的页面。请扩大范围以查看域名级引用。`
               : undefined
           }
         />
@@ -286,7 +288,7 @@ export function CitationTabsCard({
           table={queriesTable}
           emptyMessage={
             isUrlScoped
-              ? `No sampled prompts cited a page under ${result.resolvedTarget}. Broaden the scope to see domain-level prompts.`
+              ? `抽样提示词中没有引用 ${result.resolvedTarget} 下页面的结果。请扩大范围以查看域名级提示词。`
               : undefined
           }
         />

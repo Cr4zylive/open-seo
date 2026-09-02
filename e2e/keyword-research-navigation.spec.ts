@@ -21,7 +21,7 @@ test.describe("Keyword Research navigation", () => {
       `/p/${projectId}/keywords?q=keyword%20research&loc=2840&kLimit=150&mode=auto`,
     );
     await expect(
-      page.getByRole("heading", { name: "Keyword Research", exact: true }),
+      page.getByRole("heading", { name: "关键词研究", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("row", { name: /keyword research/i }).first(),
@@ -98,7 +98,7 @@ test.describe("Keyword Research navigation", () => {
       .toBe("backlinks");
 
     const closeButton = page.getByRole("button", {
-      name: "Close backlinks tab",
+      name: "关闭 backlinks 标签页",
     });
     const closedTabId = await closeButton.getAttribute("data-search-tab-id");
     expect(closedTabId).toBeTruthy();
@@ -118,7 +118,7 @@ test.describe("Keyword Research navigation", () => {
     // Count only search tabs: the app shell has grown other tablists
     // (Browse/Chat), so a bare role=tab count would include them.
     await expect(
-      page.getByRole("tablist", { name: "Search tabs" }).getByRole("tab"),
+      page.getByRole("tablist", { name: "搜索标签页" }).getByRole("tab"),
     ).toHaveCount(2);
   });
 });

@@ -18,10 +18,10 @@ import {
 } from "./shared";
 
 const ROLE_LABELS: Record<KeyPageRole, string> = {
-  hub: "Hub page",
-  spoke: "Supporting page",
-  money: "Money page",
-  other: "Other",
+  hub: "枢纽页",
+  spoke: "支撑页",
+  money: "转化页",
+  other: "其他",
 };
 
 export function KeyPagesSection({
@@ -66,8 +66,8 @@ export function KeyPagesSection({
   return (
     <section className="space-y-3">
       <SectionHeader
-        title="Key pages"
-        hint="A shortlist of the pages that carry the site — not an inventory."
+        title="关键页面"
+        hint="撑起整个网站的少量页面清单，不是全站目录。"
         action={
           <button
             type="button"
@@ -75,7 +75,7 @@ export function KeyPagesSection({
             onClick={() => setAdding(true)}
           >
             <Plus className="size-3.5" />
-            Add page
+            添加页面
           </button>
         }
       />
@@ -93,8 +93,7 @@ export function KeyPagesSection({
       {keyPages.length === 0 ? (
         adding ? null : (
           <EmptyState>
-            No key pages yet. Add the handful that has to rank, or let an agent
-            propose them from your last site audit.
+            还没有关键页面。请添加必须获得排名的那几页，或让智能体根据最近一次站点审计来提议。
           </EmptyState>
         )
       ) : (
@@ -125,7 +124,7 @@ export function KeyPagesSection({
                   </div>
                   {page.topic ? (
                     <p className="text-sm text-base-content/70">
-                      Target: {page.topic}
+                      主题：{page.topic}
                     </p>
                   ) : null}
                   {page.notes ? (
@@ -137,13 +136,13 @@ export function KeyPagesSection({
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"
-                    aria-label={`Edit ${page.url}`}
+                    aria-label={`编辑 ${page.url}`}
                     onClick={() => setEditingId(page.id)}
                   >
                     <Pencil className="size-3.5" />
                   </button>
                   <ConfirmDeleteButton
-                    label={`Remove ${page.url}`}
+                    label={`移除 ${page.url}`}
                     pending={update.isPending}
                     onConfirm={() =>
                       update.mutate([{ removeKeyPages: [page.url] }])
@@ -201,7 +200,7 @@ function KeyPageForm({
         placeholder="example.com/pricing"
         maxLength={2048}
         className="input input-bordered input-sm w-full"
-        aria-label="Page URL"
+          aria-label="页面网址"
       />
       <div className="grid gap-2 sm:grid-cols-2">
         <select
@@ -215,7 +214,7 @@ function KeyPageForm({
             })
           }
           className="select select-bordered select-sm w-full"
-          aria-label="Page role"
+          aria-label="页面角色"
         >
           {KEY_PAGE_ROLES.map((role) => (
             <option key={role} value={role}>
@@ -229,20 +228,20 @@ function KeyPageForm({
           onChange={(event) =>
             setDraft({ ...draft, topic: event.target.value })
           }
-          placeholder="Target topic (optional)"
+          placeholder="目标主题（可选）"
           maxLength={200}
           className="input input-bordered input-sm w-full"
-          aria-label="Target topic"
+          aria-label="目标主题"
         />
       </div>
       <input
         type="text"
         value={draft.notes}
         onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-        placeholder="Notes (optional)"
+          placeholder="备注（可选）"
         maxLength={500}
         className="input input-bordered input-sm w-full"
-        aria-label="Page notes"
+          aria-label="页面备注"
       />
       <FormActions
         pending={pending}

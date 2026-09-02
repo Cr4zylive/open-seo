@@ -8,9 +8,9 @@ export const Route = createFileRoute("/_project/p/$projectId/settings")({
 });
 
 const tabs = [
-  { to: "/p/$projectId/settings" as const, label: "General", exact: true },
-  { to: "/p/$projectId/settings/context" as const, label: "Context" },
-  { to: "/p/$projectId/settings/integrations" as const, label: "Integrations" },
+  { to: "/p/$projectId/settings" as const, label: "常规", exact: true },
+  { to: "/p/$projectId/settings/context" as const, label: "上下文" },
+  { to: "/p/$projectId/settings/integrations" as const, label: "集成" },
 ];
 
 function ProjectSettingsLayout() {
@@ -30,11 +30,11 @@ function ProjectSettingsLayout() {
             className="inline-flex items-center gap-1 text-sm text-base-content/60 transition-colors hover:text-base-content"
           >
             <ChevronLeft className="size-4" />
-            Projects
+            项目
           </Link>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
-              Project settings
+              项目设置
             </h1>
             <p className="text-sm text-base-content/60">
               {project?.name ?? " "}
