@@ -35,10 +35,10 @@ export function useContextUpdate(projectId: string) {
     onMutate: () => queryClient.cancelQueries({ queryKey }),
     onSuccess: (context) => {
       queryClient.setQueryData(queryKey, context);
-      toast.success("Project context updated");
+      toast.success("项目上下文已更新");
     },
     onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "Couldn't save your changes")),
+      toast.error(getStandardErrorMessage(error, "无法保存更改")),
     // The page instantiates this mutation per section, so two concurrent
     // patches can settle out of order and the slower (earlier-snapshotted)
     // response can land in the cache last; a settle-time refetch converges
@@ -48,32 +48,32 @@ export function useContextUpdate(projectId: string) {
 }
 
 const AUTHOR_LABELS: Record<ContextAuthor, string> = {
-  user: "you",
+  user: "你",
   sam: "SAM",
-  mcp: "your AI client",
+  mcp: "你的 AI 客户端",
 };
 
 export function Provenance({ by, at }: { by: ContextAuthor; at?: string }) {
   return (
     <span className="text-xs text-base-content/40">
       {at
-        ? `Updated by ${AUTHOR_LABELS[by]} · ${formatRelativeTime(at)}`
-        : `Added by ${AUTHOR_LABELS[by]}`}
+        ? `由 ${AUTHOR_LABELS[by]} 更新 · ${formatRelativeTime(at)}`
+        : `由 ${AUTHOR_LABELS[by]} 添加`}
     </span>
   );
 }
 
 function formatRelativeTime(iso: string): string {
   const timestamp = new Date(iso).getTime();
-  if (Number.isNaN(timestamp)) return "recently";
+  if (Number.isNaN(timestamp)) return "最近";
 
   const minutes = Math.floor((Date.now() - timestamp) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours} 小时前`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return `${days} 天前`;
   return new Date(timestamp).toLocaleDateString();
 }
 
@@ -141,14 +141,14 @@ export function ConfirmDeleteButton({
             onConfirm();
           }}
         >
-          Remove
+          移除
         </button>
         <button
           type="button"
           className="btn btn-ghost btn-xs"
           onClick={() => setConfirming(false)}
         >
-          Cancel
+          取消
         </button>
       </>
     );
@@ -184,14 +184,14 @@ export function FormActions({
         onClick={onCancel}
         disabled={pending}
       >
-        Cancel
+        取消
       </button>
       <button
         type="submit"
         className="btn btn-primary btn-xs"
         disabled={disabled || pending}
       >
-        Save
+        保存
       </button>
     </div>
   );

@@ -26,7 +26,7 @@ test.describe("Domain Overview filters", () => {
     ).toHaveAttribute("aria-selected", "true");
 
     const inactiveCloseButton = page.getByRole("button", {
-      name: `Close ${PRIMARY_TEST_DOMAIN} tab`,
+      name: `关闭 ${PRIMARY_TEST_DOMAIN} 标签页`,
     });
     await inactiveCloseButton.click();
 
@@ -55,7 +55,7 @@ test.describe("Domain Overview filters", () => {
     ).toHaveAttribute("aria-selected", "true");
 
     const activeCloseButton = page.getByRole("button", {
-      name: `Close ${SECONDARY_TEST_DOMAIN} tab`,
+      name: `关闭 ${SECONDARY_TEST_DOMAIN} 标签页`,
     });
     const closedTabId =
       await activeCloseButton.getAttribute("data-search-tab-id");
@@ -82,21 +82,21 @@ test.describe("Domain Overview filters", () => {
     await openFilters(page);
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Min").nth(0),
+      page.getByPlaceholder("最小值").nth(0),
       "10",
       "Traffic min",
     );
     await applyFilters(page);
 
-    await ensureFiltersOpen(page, "Include Terms");
+    await ensureFiltersOpen(page, "包含词语");
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Max").nth(1),
+      page.getByPlaceholder("最大值").nth(1),
       "5000",
       "Volume max",
     );
 
-    await expect(page.getByText("unapplied")).toBeVisible();
+    await expect(page.getByText("未应用")).toBeVisible();
     await expectPageResponsive(page, "after editing Volume max");
   });
 
@@ -108,21 +108,21 @@ test.describe("Domain Overview filters", () => {
     await openFilters(page);
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Min").nth(0),
+      page.getByPlaceholder("最小值").nth(0),
       "10",
       "Traffic min",
     );
     await applyFilters(page, "pMinTraffic", "10");
 
-    await ensureFiltersOpen(page, "Include Page Terms");
+    await ensureFiltersOpen(page, "页面包含词语");
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Max").nth(1),
+      page.getByPlaceholder("最大值").nth(1),
       "50",
       "Keywords max",
     );
 
-    await expect(page.getByText("unapplied")).toBeVisible();
+    await expect(page.getByText("未应用")).toBeVisible();
     await expectPageResponsive(page, "after editing Keywords max");
   });
 
@@ -134,7 +134,7 @@ test.describe("Domain Overview filters", () => {
     await openFilters(page);
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Min").nth(0),
+      page.getByPlaceholder("最小值").nth(0),
       "10",
       "Keyword traffic min",
     );
@@ -144,14 +144,14 @@ test.describe("Domain Overview filters", () => {
     await openFilters(page);
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Min").nth(0),
+      page.getByPlaceholder("最小值").nth(0),
       "20",
       "Page traffic min",
     );
     await applyFilters(page, "pMinTraffic", "20");
 
-    await ensureFiltersOpen(page, "Include Page Terms");
-    await page.getByRole("button", { name: "Clear all" }).click();
+    await ensureFiltersOpen(page, "页面包含词语");
+    await page.getByRole("button", { name: "全部清除" }).click();
     await expect
       .poll(() => new URL(page.url()).searchParams.get("pMinTraffic"))
       .toBe(null);
@@ -163,8 +163,8 @@ test.describe("Domain Overview filters", () => {
     const keywordUrl = new URL(page.url());
     keywordUrl.searchParams.delete("tab");
     await page.goto(keywordUrl.toString());
-    await ensureFiltersOpen(page, "Include Terms");
-    await expect(page.getByPlaceholder("Min").nth(0)).toHaveValue("10");
+    await ensureFiltersOpen(page, "包含词语");
+    await expect(page.getByPlaceholder("最小值").nth(0)).toHaveValue("10");
   });
 
   test("submitting a new domain clears the previous domain filters", async ({
@@ -175,20 +175,20 @@ test.describe("Domain Overview filters", () => {
     await openFilters(page);
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Min").nth(0),
+      page.getByPlaceholder("最小值").nth(0),
       "20",
       "Page traffic min",
     );
     await applyFilters(page, "pMinTraffic", "20");
 
-    const domainInput = page.getByPlaceholder("Enter a domain").first();
+    const domainInput = page.getByPlaceholder("输入域名或网址").first();
     await domainInput.click();
     await domainInput.press(
       process.platform === "darwin" ? "Meta+A" : "Control+A",
     );
     await domainInput.press("Backspace");
     await domainInput.pressSequentially(SECONDARY_TEST_DOMAIN);
-    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("button", { name: "搜索", exact: true }).click();
 
     await expect
       .poll(() => new URL(page.url()).searchParams.get("domain"))
@@ -196,8 +196,8 @@ test.describe("Domain Overview filters", () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get("pMinTraffic"))
       .toBe(null);
-    await ensureFiltersOpen(page, "Include Page Terms");
-    await expect(page.getByPlaceholder("Min").nth(0)).toHaveValue("");
+    await ensureFiltersOpen(page, "页面包含词语");
+    await expect(page.getByPlaceholder("最小值").nth(0)).toHaveValue("");
     await expectPageResponsive(page, "after submitting a new domain");
   });
 
@@ -209,7 +209,7 @@ test.describe("Domain Overview filters", () => {
     await openFilters(page);
     await typeIntoDraftInput(
       page,
-      page.getByPlaceholder("Min").nth(0),
+      page.getByPlaceholder("最小值").nth(0),
       "20",
       "Page traffic min",
     );
@@ -218,14 +218,14 @@ test.describe("Domain Overview filters", () => {
     const urlWithoutPageFilters = new URL(page.url());
     urlWithoutPageFilters.searchParams.delete("pMinTraffic");
     await page.goto(urlWithoutPageFilters.toString());
-    await ensureFiltersOpen(page, "Include Page Terms");
-    await expect(page.getByPlaceholder("Min").nth(0)).toHaveValue("20");
+    await ensureFiltersOpen(page, "页面包含词语");
+    await expect(page.getByPlaceholder("最小值").nth(0)).toHaveValue("20");
     expect(new URL(page.url()).searchParams.get("pMinTraffic")).toBe(null);
 
     const urlWithExplicitPageFilters = new URL(page.url());
     urlWithExplicitPageFilters.searchParams.set("pMinTraffic", "30");
     await page.goto(urlWithExplicitPageFilters.toString());
-    await ensureFiltersOpen(page, "Include Page Terms");
-    await expect(page.getByPlaceholder("Min").nth(0)).toHaveValue("30");
+    await ensureFiltersOpen(page, "页面包含词语");
+    await expect(page.getByPlaceholder("最小值").nth(0)).toHaveValue("30");
   });
 });

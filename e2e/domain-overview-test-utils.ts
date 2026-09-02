@@ -198,17 +198,17 @@ export async function openDomainOverview(page: Page, tab: DomainTab) {
 
   await page.goto(`/p/${match[1]}/domain?${params.toString()}`);
   await expect(
-    page.getByRole("heading", { name: "Domain Overview" }),
+    page.getByRole("heading", { name: "域名概览" }),
   ).toBeVisible();
   await dismissSetupModal(page);
-  await expect(page.getByRole("button", { name: /Filters/ })).toBeVisible({
+  await expect(page.getByRole("button", { name: "筛选", exact: true })).toBeVisible({
     timeout: 30_000,
   });
   await expectPageResponsive(page, "after opening Domain Overview");
 }
 
 async function dismissSetupModal(page: Page) {
-  const dismissButton = page.getByRole("button", { name: "Dismiss" });
+  const dismissButton = page.getByRole("button", { name: "暂不处理" });
   if (await dismissButton.isVisible()) {
     await dismissButton.click();
   }
@@ -227,7 +227,7 @@ export async function waitForDomainRows(page: Page, label: string) {
 }
 
 export async function switchDomainTab(page: Page, tab: DomainTab) {
-  const label = tab === "keywords" ? "Top Keywords" : "Top Pages";
+  const label = tab === "keywords" ? "热门关键词" : "热门页面";
   await page.getByRole("tab", { name: label }).click();
   await expect(page.getByRole("tab", { name: label })).toHaveAttribute(
     "aria-selected",
@@ -237,14 +237,14 @@ export async function switchDomainTab(page: Page, tab: DomainTab) {
 }
 
 export async function openFilters(page: Page) {
-  await page.getByRole("button", { name: /Filters/ }).click();
-  await expect(page.getByText("Refine table results")).toBeVisible();
+  await page.getByRole("button", { name: "筛选", exact: true }).click();
+  await expect(page.getByText("筛选表格结果")).toBeVisible();
   await expectPageResponsive(page, "after opening filters");
 }
 
 export async function closeFilters(page: Page) {
-  await page.getByRole("button", { name: /Filters/ }).click();
-  await expect(page.getByText("Refine table results")).toBeHidden();
+  await page.getByRole("button", { name: "筛选", exact: true }).click();
+  await expect(page.getByText("筛选表格结果")).toBeHidden();
   await expectPageResponsive(page, "after closing filters");
 }
 
@@ -260,11 +260,11 @@ export async function applyFilters(
   expectedParam = "minTraffic",
   expectedValue = "10",
 ) {
-  await page.getByRole("button", { name: /Apply filters/ }).click();
+  await page.getByRole("button", { name: /应用筛选/ }).click();
   await expect
     .poll(() => new URL(page.url()).searchParams.get(expectedParam))
     .toBe(expectedValue);
-  await expect(page.getByRole("button", { name: /Filters/ })).toContainText(
+  await expect(page.getByRole("button", { name: "筛选", exact: true })).toContainText(
     "1",
   );
   await expectPageResponsive(page, "after applying filters");
@@ -336,7 +336,7 @@ export async function typeIntoDraftInput(
 
 export async function expectPageResponsive(page: Page, label: string) {
   await withTimeout(
-    page.evaluate(() => document.body.textContent?.includes("Domain Overview")),
+    page.evaluate(() => document.body.textContent?.includes("域名概览")),
     RESPONSIVE_TIMEOUT_MS,
     `Page did not respond ${label}`,
   );

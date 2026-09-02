@@ -222,7 +222,7 @@ export function ProjectSwitcher({
         <button
           ref={triggerRef}
           type="button"
-          aria-label="Switch project"
+          aria-label="切换项目"
           aria-expanded={open}
           aria-haspopup="listbox"
           onClick={() => (open ? closePanel() : openPanel())}
@@ -231,7 +231,7 @@ export function ProjectSwitcher({
         >
           <span className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-medium text-base-content">
-              {activeProject?.name ?? "Select project"}
+              {activeProject?.name ?? "选择项目"}
             </span>
             {activeProject?.domain ? (
               <span className="truncate text-xs font-normal text-base-content/50">
@@ -245,8 +245,8 @@ export function ProjectSwitcher({
           <Link
             to="/p/$projectId/settings"
             params={{ projectId: activeProject.id }}
-            aria-label="Project settings"
-            title="Project settings"
+            aria-label="项目设置"
+            title="项目设置"
             onClick={() => {
               closePanel();
               onCloseDrawer?.();
@@ -268,8 +268,8 @@ export function ProjectSwitcher({
                   ref={searchInputRef}
                   type="text"
                   value={query}
-                  placeholder="Find project…"
-                  aria-label="Filter projects"
+                  placeholder="查找项目…"
+                  aria-label="筛选项目"
                   aria-controls="project-switcher-listbox"
                   aria-activedescendant={
                     filteredProjects[highlightIndex]
@@ -295,7 +295,7 @@ export function ProjectSwitcher({
               ref={listRef}
               id="project-switcher-listbox"
               role="listbox"
-              aria-label="Projects"
+              aria-label="项目"
               className="menu max-h-[min(60vh,21rem)] w-full flex-nowrap overflow-y-auto p-2"
             >
               {filteredProjects.map((project, index) => {
@@ -335,7 +335,7 @@ export function ProjectSwitcher({
               {filteredProjects.length === 0 ? (
                 <li className="menu-disabled">
                   <span className="text-base-content/50">
-                    No projects match “{query.trim()}”
+                    没有匹配的项目：“{query.trim()}”
                   </span>
                 </li>
               ) : null}
@@ -359,7 +359,7 @@ export function ProjectSwitcher({
                 }}
               >
                 <Plus className="size-4" />
-                New project
+                新建项目
               </button>
             </li>
             <li>
@@ -371,7 +371,7 @@ export function ProjectSwitcher({
                 }}
               >
                 <FolderCog className="size-4" />
-                Manage projects
+                管理项目
               </Link>
             </li>
           </ul>

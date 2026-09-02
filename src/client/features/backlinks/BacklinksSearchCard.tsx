@@ -28,7 +28,7 @@ function getBacklinksValidationErrors(
 
     return createFormValidationErrors({
       fields: {
-        target: "Enter a domain or URL to analyze.",
+        target: "请输入要分析的域名或网址。",
       },
     });
   }
@@ -97,7 +97,7 @@ export function BacklinksSearchCard({
                     >
                       <Search className="size-4 text-base-content/60" />
                       <input
-                        placeholder="Enter a domain or URL"
+                        placeholder="输入域名或网址"
                         value={field.state.value}
                         onChange={(event) => {
                           const nextTarget = event.target.value;
@@ -134,7 +134,7 @@ export function BacklinksSearchCard({
                     className="btn btn-primary shrink-0 px-6"
                     disabled={isSubmitting}
                   >
-                    {isSubmitting ? "Loading..." : "Search"}
+                    {isSubmitting ? "加载中…" : "搜索"}
                   </button>
                 )}
               </form.Subscribe>

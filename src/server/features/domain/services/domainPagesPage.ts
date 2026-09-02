@@ -73,7 +73,7 @@ function parseTerms(value: string | undefined): string[] {
   if (!value) return [];
   return value
     .toLowerCase()
-    .split(/[,+]/)
+    .split(/[,+，、]/)
     .map((term) => term.trim())
     .filter(Boolean);
 }

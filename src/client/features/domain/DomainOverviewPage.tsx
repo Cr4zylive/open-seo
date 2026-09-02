@@ -357,10 +357,7 @@ function useDomainOverviewState({
     controlsForm.setErrorMap({
       onSubmit: overviewQuery.error
         ? createFormValidationErrors({
-            form: getStandardErrorMessage(
-              overviewQuery.error,
-              "Lookup failed.",
-            ),
+            form: getStandardErrorMessage(overviewQuery.error, "查询失败。"),
           })
         : undefined,
     });
@@ -386,7 +383,7 @@ function useDomainOverviewState({
       locationCode: routeState.locationCode,
     });
     if (!overview.hasData) {
-      toast.info("Not enough data for this domain");
+      toast.info("此域名暂无足够数据");
     }
   }, [
     addSearch,
@@ -538,7 +535,7 @@ export function DomainOverviewPage({
           }}
         >
           <ArrowLeft className="size-4" />
-          Recent searches
+          最近搜索
         </button>
       </div>
       <SearchTabStrip
@@ -556,10 +553,9 @@ export function DomainOverviewPage({
     <div className="px-4 py-4 md:px-6 md:py-6 pb-24 md:pb-8 overflow-auto">
       <div className="mx-auto max-w-7xl space-y-4">
         <div>
-          <h1 className="text-2xl font-semibold">Domain Overview</h1>
+          <h1 className="text-2xl font-semibold">域名概览</h1>
           <p className="text-sm text-base-content/70">
-            Analyze any domain&apos;s SEO profile: traffic, keywords, and
-            backlinks.
+            分析任意域名的 SEO 概况，包括流量、关键词和反向链接。
           </p>
         </div>
 
@@ -604,7 +600,7 @@ export function DomainOverviewPage({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <StatCard
-                label="Estimated Organic Traffic"
+                label="预估自然搜索流量"
                 value={formatMetric(
                   state.overview.organicTraffic,
                   state.overview.hasData,
@@ -612,7 +608,7 @@ export function DomainOverviewPage({
                 hint={overviewMetricsHint}
               />
               <StatCard
-                label="Organic Keywords"
+                label="自然搜索关键词"
                 value={formatMetric(
                   state.overview.organicKeywords,
                   state.overview.hasData,
@@ -624,8 +620,7 @@ export function DomainOverviewPage({
             {!state.overview.hasData ? (
               <div className="alert alert-info">
                 <span>
-                  Not enough data for this scope yet. Try another domain or a
-                  broader scope.
+                  此范围暂无足够数据，请尝试其他域名或更宽的范围。
                 </span>
               </div>
             ) : null}
@@ -640,7 +635,7 @@ export function DomainOverviewPage({
                     className={`tab ${routeState.tab === "keywords" ? "tab-active" : ""}`}
                     onClick={() => state.handleTabChange("keywords")}
                   >
-                    Top Keywords
+                    热门关键词
                   </button>
                   <button
                     type="button"
@@ -649,7 +644,7 @@ export function DomainOverviewPage({
                     className={`tab ${routeState.tab === "pages" ? "tab-active" : ""}`}
                     onClick={() => state.handleTabChange("pages")}
                   >
-                    Top Pages
+                    热门页面
                   </button>
                 </div>
               </div>

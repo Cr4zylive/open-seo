@@ -33,10 +33,10 @@ export type ResearchScope = (typeof RESEARCH_SCOPES)[number];
 export const researchScopeSchema = z.enum(RESEARCH_SCOPES);
 
 export const RESEARCH_SCOPE_LABELS: Record<ResearchScope, string> = {
-  exact_url: "Exact URL",
-  subfolder: "Subfolder",
-  domain: "Domain",
-  subdomains: "Subdomains",
+  exact_url: "精确 URL",
+  subfolder: "目录",
+  domain: "域名",
+  subdomains: "含子域名",
 };
 
 /** Base wording for MCP `scope` params; tools append their own caveats. */
@@ -45,10 +45,10 @@ export const RESEARCH_SCOPE_PARAM_DESCRIPTION =
 
 /** One-line explanations shown in the scope dropdown. */
 export const RESEARCH_SCOPE_DESCRIPTIONS: Record<ResearchScope, string> = {
-  exact_url: "One page only",
-  subfolder: "The path and everything under it",
-  domain: "The hostname, without subdomains",
-  subdomains: "The domain plus all its subdomains",
+  exact_url: "仅此一个页面",
+  subfolder: "该路径及其下的所有页面",
+  domain: "该主机名，不含子域名",
+  subdomains: "该域名及其所有子域名",
 };
 
 /** Wildcard-style pattern examples shown under each scope option. */
@@ -120,7 +120,7 @@ export function parseResearchTarget(
 ): ParseResearchTargetResult {
   const trimmed = input.trim();
   if (!trimmed) {
-    return { ok: false, message: "Enter a domain or URL" };
+    return { ok: false, message: "请输入域名或网址" };
   }
 
   const withProtocol = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed)
@@ -131,13 +131,13 @@ export function parseResearchTarget(
   try {
     parsed = new URL(withProtocol);
   } catch {
-    return { ok: false, message: "Enter a valid domain like example.com" };
+    return { ok: false, message: "请输入有效域名，例如 example.com" };
   }
 
   if (parsed.username || parsed.password) {
     return {
       ok: false,
-      message: "URLs with embedded credentials are not supported",
+      message: "不支持包含嵌入式凭据的网址",
     };
   }
 
@@ -151,7 +151,7 @@ export function parseResearchTarget(
     !/^[a-z\d.-]+$/.test(hostname) ||
     !isValidDomainHost(hostname)
   ) {
-    return { ok: false, message: "Enter a valid domain like example.com" };
+    return { ok: false, message: "请输入有效域名，例如 example.com" };
   }
 
   // Query strings and fragments never create separate research scopes.
@@ -160,7 +160,7 @@ export function parseResearchTarget(
   if (requestedScope === "subfolder" && path === "") {
     return {
       ok: false,
-      message: "Add a path to use Subfolder (e.g. example.com/blog)",
+      message: "使用「目录」范围时请带上路径（例如 example.com/blog）",
     };
   }
 
