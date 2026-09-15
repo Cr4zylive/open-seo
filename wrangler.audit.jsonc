@@ -18,6 +18,7 @@
       "enabled": true,
     },
   },
+  "keep_vars": true,
   // This worker is the code home of the site-audit workflow; the app worker
   // binds to it cross-script via script_name (see wrangler.jsonc).
   "workflows": [

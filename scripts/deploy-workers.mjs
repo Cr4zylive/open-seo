@@ -2,9 +2,11 @@
 // Cloudflare rejects the app upload (API 10143) if AUDIT_ENGINE / the
 // cross-script site-audit workflow points at a Worker that does not exist.
 //
-// Used by `pnpm run deploy`. Cloudflare Workers Builds must set its Deploy
-// command to `pnpm run deploy` — the default `npx wrangler deploy` only
-// uploads open-seo and will keep failing after v0.1.8.
+// Used by `pnpm run deploy`. Cloudflare Workers Builds must set BOTH the
+// production Deploy command and the non-production branch command to
+// `pnpm run deploy`. The default `npx wrangler versions upload` cannot
+// apply Durable Object migrations (API 10211) and does not create
+// open-seo-audit (API 10143).
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 

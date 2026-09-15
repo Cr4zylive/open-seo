@@ -52,9 +52,11 @@ One-time, on the `open-seo` Worker: **Settings → Build → Builds configuratio
    pnpm run deploy
    ```
 
-3. If you use non-production branch builds, set **Non-production branch deploy command** to the same `pnpm run deploy`. The default `npx wrangler versions upload` has the same 10143 failure until `open-seo-audit` exists, and it still would not update the audit Worker.
+   Do not leave this as `npx wrangler versions upload` and do not put `pnpm run deploy` only in the Build command. v0.1.8 includes Durable Object migrations (delete `AuditScratchpad` and `OnboardingChatAgent` on `open-seo`; create `AuditScratchpad` on `open-seo-audit`). Cloudflare rejects those on the versions API with **10211**.
 
-That command applies D1 migrations, builds both bundles, deploys `open-seo-audit` first, then deploys `open-seo`. After this dashboard change, later OpenSEO releases that add Workers stay on `pnpm run deploy` in `package.json` — you should not need to touch the dashboard again for this.
+3. Set **Non-production branch deploy command** to the same `pnpm run deploy`. This is the command Cloudflare Git runs for every branch that is not the production branch (including `_tmp_*` feature branches). Its default is `npx wrangler versions upload`, which fails with 10211 until the 0.1.8 Durable Object migrations have been applied by a real `wrangler deploy`.
+
+That command applies D1 migrations, builds both bundles, deploys `open-seo-audit` first with `wrangler deploy`, then deploys `open-seo` the same way. After this dashboard change, later OpenSEO releases that add Workers stay on `pnpm run deploy` in `package.json` — you should not need to touch the dashboard again for this.
 
 Then, once, copy the DataForSEO secret onto the new Worker (same value as `open-seo`):
 
@@ -97,7 +99,9 @@ Replace `open-seo` with your bucket name if you changed it.
 
 `https://<your-worker-hostname>/api/health` reports runtime configuration checks and database status. For server errors, open the Worker `Logs` or run `pnpm exec wrangler tail`. Site audits run in `open-seo-audit`: `pnpm exec wrangler tail open-seo-audit`.
 
-**Deploy fails with API 10143 / `AUDIT_ENGINE` / `open-seo-audit` was not found.** Cloudflare Git is still running `npx wrangler deploy`. Follow [Updating (Cloudflare Git / Workers Builds)](#updating-cloudflare-git--workers-builds) above.
+**Deploy fails with API 10143 / `AUDIT_ENGINE` / `open-seo-audit` was not found.** Cloudflare Git is still running `npx wrangler deploy` (or `versions upload`) for only the app Worker. Follow [Updating (Cloudflare Git / Workers Builds)](#updating-cloudflare-git--workers-builds) above.
+
+**Deploy fails with API 10211 / Durable Object migration / `/workers/scripts/open-seo/versions`.** The build used versioned upload (`wrangler versions upload`), which cannot apply Durable Object migrations. 0.1.8 must go out as `wrangler deploy`. Set **both** Deploy command and Non-production branch deploy command to `pnpm run deploy`, then retry. After those migrations are on the account, later uploads without new Durable Object tags can use versioned deploys again.
 
 **Migrating to the current flow** is not supported yet — the new deploy provisions fresh resources, so your data would not move. Keep using this page.
 
