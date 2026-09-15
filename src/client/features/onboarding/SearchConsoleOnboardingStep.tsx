@@ -41,7 +41,7 @@ export function SearchConsoleOnboardingStep() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
-          现在连接 Google Search Console？
+          要现在接入 Google Search Console 吗？
         </h1>
         <p className="mt-3 text-sm leading-relaxed text-base-content/60">
           把真实点击和查询词接入 OpenSEO 和你的 AI 智能体。也可以稍后在仪表盘完成。
