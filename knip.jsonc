@@ -29,6 +29,8 @@
     "**/*.{js,mjs,ts,tsx}",
     "!src/routeTree.gen.ts",
     "!web/**",
+    // Standalone AdSense tool site (not part of the OpenSEO app graph)
+    "!sites/**",
     // Alchemy state/bundle artifacts (gitignored)
     "!.alchemy/**",
     "!badseo/**",
