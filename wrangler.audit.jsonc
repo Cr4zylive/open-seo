@@ -18,6 +18,7 @@
       "enabled": true,
     },
   },
+  "keep_vars": true,
   // This worker is the code home of the site-audit workflow; the app worker
   // binds to it cross-script via script_name (see wrangler.jsonc).
   "workflows": [
@@ -38,6 +39,10 @@
       },
     ],
   },
+  // v1 of THIS worker only. Never apply this file to the open-seo script:
+  // that Worker already created AuditScratchpad in its own v3, and Cloudflare
+  // returns API 10074. scripts/deploy-workers.mjs keeps the names apart
+  // under Workers Builds (WRANGLER_CI_OVERRIDE_NAME).
   "migrations": [
     {
       "tag": "v1",

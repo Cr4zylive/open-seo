@@ -12,6 +12,9 @@
       "enabled": true,
     },
   },
+  // Dashboard secrets/vars (DATAFORSEO_API_KEY, TEAM_DOMAIN, POLICY_AUD)
+  // survive `wrangler deploy` from Cloudflare Git.
+  "keep_vars": true,
   // Smart Placement relocates only the `fetch` handler (cron + Workflow runs
   // stay at the edge) toward external subrequests — Postgres via Hyperdrive,
   // SEO APIs — not D1/KV/R2 bindings, so it's a DB no-op on the D1 default.
@@ -55,6 +58,15 @@
   // bound cross-script here (the Cloudflare API rejects deleting the class
   // below while any binding still references its name). Cancel + GDPR
   // erasure go through this service binding's AuditEngine entrypoint.
+  //
+  // Cloudflare Git / Workers Builds defaults to `npx wrangler deploy` on the
+  // production branch and `npx wrangler versions upload` on every other
+  // branch. The latter cannot apply Durable Object migrations (API 10211)
+  // and never creates open-seo-audit (API 10143). Set BOTH dashboard deploy
+  // commands to `pnpm run deploy` (docs/SELF_HOSTING_CLOUDFLARE_LEGACY.md).
+  // That script also unsets WRANGLER_CI_OVERRIDE_NAME for the audit Worker:
+  // Builds would otherwise upload it as open-seo and replay
+  // new_sqlite_classes AuditScratchpad (API 10074).
   "services": [
     {
       "binding": "AUDIT_ENGINE",
