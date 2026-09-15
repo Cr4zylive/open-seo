@@ -2,9 +2,9 @@ import { Settings, User } from "lucide-react";
 import { ThemePreferenceMenuItems } from "@/client/components/ThemePreferenceMenuItems";
 import { signOutAndRedirect } from "@/lib/auth-client";
 
-// Account dropdown shared by the onboarding wizard and the onboarding chat so a
-// signed-in user can reach Settings / theme / sign out from either surface.
-// Fixed top-right; renders nothing until we know the user's email.
+// Account dropdown for the onboarding wizard so a signed-in user can reach
+// Settings / theme / sign out from it. Fixed top-right; renders nothing until
+// we know the user's email.
 export function OnboardingAccountMenu({
   email,
 }: {
@@ -21,7 +21,7 @@ export function OnboardingAccountMenu({
           type="button"
           tabIndex={0}
           className="btn btn-ghost btn-circle"
-          aria-label="Open account menu"
+          aria-label="打开账户菜单"
         >
           <User className="h-5 w-5" />
         </button>
@@ -37,13 +37,13 @@ export function OnboardingAccountMenu({
           <li>
             <a href="/settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              Settings
+              设置
             </a>
           </li>
           <ThemePreferenceMenuItems />
           <li>
             <button type="button" onClick={handleSignOut}>
-              Sign out
+              退出登录
             </button>
           </li>
         </ul>

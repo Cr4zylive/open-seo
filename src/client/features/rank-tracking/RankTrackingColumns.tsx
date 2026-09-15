@@ -119,17 +119,27 @@ function makeKeywordColumn(
     id: "keyword",
     accessorKey: "keyword",
     header: ({ column }) => (
-      <SortableHeader column={column} label="Keyword" id="keyword" />
+      <SortableHeader column={column} label="关键词" id="keyword" />
     ),
     cell: ({ row }) => (
-      <button
-        type="button"
-        className="font-medium text-left link link-hover decoration-dotted underline-offset-2"
-        onClick={() => onKeywordClick(row.original)}
-        title="View position history"
-      >
-        {row.original.keyword}
-      </button>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          className="font-medium text-left link link-hover decoration-dotted underline-offset-2"
+          onClick={() => onKeywordClick(row.original)}
+          title="查看排名历史"
+        >
+          {row.original.keyword}
+        </button>
+        {row.original.matchCase && (
+          <span
+            className="badge badge-xs cursor-help bg-base-300 border-0 text-base-content/70"
+            title="按输入原文追踪，未转成小写"
+          >
+            Aa
+          </span>
+        )}
+      </div>
     ),
     sortingFn: "alphanumeric",
   };
@@ -143,7 +153,7 @@ function makeDeviceColumn(
     id,
     accessorFn: (row) => row[device].position ?? undefined,
     header: ({ column }) => (
-      <SortableHeader column={column} label="Position" id={id} />
+      <SortableHeader column={column} label="排名" id={id} />
     ),
     size: 120,
     maxSize: 140,

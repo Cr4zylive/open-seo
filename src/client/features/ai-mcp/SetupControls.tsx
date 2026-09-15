@@ -72,7 +72,7 @@ export function CodeBlock({
       <div className="flex shrink-0 items-start border-l border-base-300 p-1.5">
         <CopyButton
           value={code}
-          successMessage="Copied to clipboard"
+          successMessage="已复制到剪贴板"
           iconOnly
           onCopy={onCopy}
         />
@@ -84,19 +84,23 @@ export function CodeBlock({
 export function CopyButton({
   value,
   successMessage,
+  label = "复制",
   iconOnly = false,
+  primary = false,
   onCopy,
 }: {
   value: string;
   successMessage: string;
+  label?: string;
   iconOnly?: boolean;
+  primary?: boolean;
   onCopy?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
     if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      toast.error("Clipboard not available");
+      toast.error("剪贴板不可用");
       return;
     }
     try {
@@ -106,7 +110,7 @@ export function CopyButton({
       setTimeout(() => setCopied(false), 2000);
       onCopy?.();
     } catch {
-      toast.error("Could not copy to clipboard");
+      toast.error("无法复制到剪贴板");
     }
   };
 
@@ -115,7 +119,7 @@ export function CopyButton({
       <button
         type="button"
         onClick={handleCopy}
-        aria-label="Copy"
+        aria-label={label}
         className="flex size-7 items-center justify-center rounded-md text-base-content/60 transition-colors hover:bg-base-200 hover:text-base-content"
       >
         {copied ? (
@@ -131,14 +135,18 @@ export function CopyButton({
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-1.5 rounded-md border border-base-300 bg-base-100 px-2 py-1 text-xs font-medium text-base-content/70 transition-colors hover:bg-base-300/50 hover:text-base-content"
+      className={
+        primary
+          ? "btn btn-primary"
+          : "inline-flex items-center gap-1.5 rounded-md border border-base-300 bg-base-100 px-2 py-1 text-xs font-medium text-base-content/70 transition-colors hover:bg-base-300/50 hover:text-base-content"
+      }
     >
       {copied ? (
         <Check className="size-3 text-success" />
       ) : (
         <Copy className="size-3" />
       )}
-      Copy
+      {copied ? "已复制" : label}
     </button>
   );
 }

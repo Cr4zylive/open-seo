@@ -60,7 +60,7 @@ function SessionsTooltip({
         {label ? formatTrendDay(label) : ""}
       </p>
       <p className="text-sm font-medium tabular-nums">
-        {formatCount(payload[0].value)} sessions
+        {formatCount(payload[0].value)} 次会话
       </p>
     </div>
   );
@@ -89,8 +89,8 @@ export function Ga4Card({
 
   return (
     <CardShell
-      title="Organic traffic"
-      stamp="Google Analytics · last 28 days"
+      title="自然搜索流量"
+      stamp="Google Analytics · 最近 28 天"
       action={
         <Link
           to="/p/$projectId/settings"
@@ -98,7 +98,7 @@ export function Ga4Card({
           hash="google-analytics"
           className={moreDetailsClass}
         >
-          Manage
+          管理
         </Link>
       }
     >
@@ -113,20 +113,20 @@ export function Ga4Card({
         </div>
       ) : reportQuery.isError ? (
         <p className="text-sm text-base-content/60">
-          Couldn&rsquo;t load Google Analytics data. Try again shortly.
+          无法加载 Google Analytics 数据，请稍后重试。
         </p>
       ) : report?.connected ? (
         // Covers null (no report row) and 0: a zero-session period would
         // otherwise render an all-zero flatline chart in an empty box.
         !report.totals.sessions ? (
           <p className="text-sm text-base-content/60">
-            No organic search traffic recorded in the last 28 days yet.
+            最近 28 天还没有自然搜索流量记录。
           </p>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <Stat
-                label="Sessions"
+                label="会话"
                 value={statValue(report.totals.sessions, formatCount)}
                 sub={statDelta(
                   report.totals.sessions,
@@ -134,7 +134,7 @@ export function Ga4Card({
                 )}
               />
               <Stat
-                label="Active users"
+                label="活跃用户"
                 value={statValue(report.totals.activeUsers, formatCount)}
                 sub={statDelta(
                   report.totals.activeUsers,
@@ -142,11 +142,11 @@ export function Ga4Card({
                 )}
               />
               <Stat
-                label="Engagement rate"
+                label="互动率"
                 value={statValue(report.totals.engagementRate, formatCtr)}
               />
               <Stat
-                label="Key events"
+                label="关键事件"
                 value={statValue(report.totals.keyEvents, formatCount)}
                 sub={statDelta(
                   report.totals.keyEvents,

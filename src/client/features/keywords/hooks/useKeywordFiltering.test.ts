@@ -1,3 +1,4 @@
+import { identity, sortBy } from "remeda";
 import { describe, expect, it } from "vitest";
 import type { KeywordIntent, KeywordResearchRow } from "@/types/keywords";
 import {
@@ -59,6 +60,17 @@ describe("parseIntentFilter", () => {
   });
 });
 
+describe("applyKeywordFiltersAndSort", () => {
+  it("accepts Chinese punctuation between filter terms", () => {
+    const result = filter(rows, { include: "running、shoes" });
+
+    expect(result.map((row) => row.keyword)).toEqual([
+      "best running shoes",
+      "buy running shoes",
+    ]);
+  });
+});
+
 describe("toggleIntentFilter", () => {
   it("adds an intent when absent and keeps canonical order", () => {
     expect(toggleIntentFilter("transactional", "informational")).toBe(
@@ -85,10 +97,12 @@ describe("applyKeywordFiltersAndSort — intent filtering", () => {
 
   it("keeps rows matching any of multiple selected intents", () => {
     const result = filter(rows, { intents: "transactional,commercial" });
-    expect(result.map((r) => r.keyword).toSorted()).toEqual([
-      "best running shoes",
-      "buy running shoes",
-    ]);
+    expect(
+      sortBy(
+        result.map((r) => r.keyword),
+        identity(),
+      ),
+    ).toEqual(["best running shoes", "buy running shoes"]);
   });
 
   it("combines the intent filter with other filters (AND)", () => {

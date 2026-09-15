@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
+import { sort } from "remeda";
 import type { RankPositionMatrixCell } from "@/serverFunctions/rank-tracking";
 
 /**
@@ -29,7 +30,7 @@ export function RankTrackingHistoryMatrix({
   if (runs.length === 0 || keywords.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-base-300 p-10 text-center text-sm text-base-content/55">
-        No history yet. Run a check to start building the timeline.
+        暂无历史记录。运行检查后即可生成时间线。
       </div>
     );
   }
@@ -41,7 +42,7 @@ export function RankTrackingHistoryMatrix({
           <tr>
             {/* Unconstrained keyword column absorbs the slack when only a few
                 check columns exist, so sparse history doesn't stretch oddly. */}
-            <th className="sticky left-0 z-10 bg-base-100 w-full">Keyword</th>
+            <th className="sticky left-0 z-10 bg-base-100 w-full">关键词</th>
             {runs.map((r) => (
               <th
                 key={r.runId}
@@ -131,9 +132,10 @@ function buildMatrix(cells: RankPositionMatrixCell[]): {
     }
     byRun.set(c.runId, c.position);
   }
-  const runs = [...runMap.entries()]
-    .map(([runId, checkedAt]) => ({ runId, checkedAt }))
-    .toSorted((a, b) => a.checkedAt.localeCompare(b.checkedAt));
+  const runs = sort(
+    [...runMap.entries()].map(([runId, checkedAt]) => ({ runId, checkedAt })),
+    (a, b) => a.checkedAt.localeCompare(b.checkedAt),
+  );
   return { runs, cellByKeyword };
 }
 

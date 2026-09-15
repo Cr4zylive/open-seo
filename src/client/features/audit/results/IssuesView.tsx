@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { sort } from "remeda";
 import {
   getIssueDescriptor,
   ISSUE_SEVERITY_ORDER,
@@ -24,9 +25,9 @@ const SEVERITY_RULE: Record<IssueSeverity, string> = {
 };
 
 const SEVERITY_LABEL: Record<IssueSeverity, string> = {
-  critical: "Critical",
-  warning: "Warning",
-  info: "Info",
+  critical: "严重",
+  warning: "警告",
+  info: "信息",
 };
 
 interface IssueGroup {
@@ -68,7 +69,8 @@ function groupIssues(issues: AuditIssueRow[]): IssueGroup[] {
     group.issues.push(issue);
   }
 
-  return Array.from(groups.values()).toSorted(
+  return sort(
+    Array.from(groups.values()),
     (a, b) =>
       ISSUE_SEVERITY_ORDER[a.severity] - ISSUE_SEVERITY_ORDER[b.severity] ||
       b.issues.length - a.issues.length,
@@ -92,10 +94,9 @@ export function IssuesView({ issues }: { issues: AuditIssueRow[] }) {
   if (issues.length === 0) {
     return (
       <div className="py-10 text-center text-base-content/60">
-        <p className="font-medium">No issues recorded for this audit.</p>
+        <p className="font-medium">此次审计未记录到问题。</p>
         <p className="text-sm mt-1">
-          Either the site is in great shape, or this audit ran before issue
-          checks existed — run a new audit to get the full report.
+          网站状态良好，或者此次审计运行于问题检查功能上线之前。请运行新审计以获取完整报告。
         </p>
       </div>
     );
@@ -166,7 +167,7 @@ function IssueRow({ group }: { group: IssueGroup }) {
           {group.title}
         </span>
         <span className="text-xs tabular-nums text-base-content/50 shrink-0">
-          {group.issues.length} {group.issues.length === 1 ? "page" : "pages"}
+          {group.issues.length} 个页面
         </span>
         <ChevronRight
           className={`size-4 shrink-0 text-base-content/40 transition-transform ${
@@ -184,7 +185,7 @@ function IssueRow({ group }: { group: IssueGroup }) {
           )}
           {group.howToFix && (
             <p className="text-sm max-w-prose">
-              <span className="font-medium">How to fix: </span>
+              <span className="font-medium">修复方法： </span>
               <span className="text-base-content/80">{group.howToFix}</span>
             </p>
           )}
@@ -220,7 +221,7 @@ function AffectedUrlList({ issues }: { issues: AuditIssueRow[] }) {
       ))}
       {remaining > 0 && (
         <div className="px-3 py-2 text-xs text-base-content/50">
-          …and {remaining} more — export the issues CSV for the full list.
+          另有 {remaining} 个问题。导出问题 CSV 可查看完整列表。
         </div>
       )}
     </div>

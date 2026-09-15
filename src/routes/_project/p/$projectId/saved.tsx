@@ -1,4 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+// Aliased: `SavedKeywordsPage` has a local `sort` const (the saved-keyword
+// sort key) that would otherwise shadow this import at the call site.
+import { sort as sortArray } from "remeda";
 import {
   keepPreviousData,
   useMutation,
@@ -130,7 +133,7 @@ function SavedKeywordsPage() {
         if (!map.has(tag.id)) map.set(tag.id, tag);
       }
     }
-    return [...map.values()].toSorted((a, b) =>
+    return sortArray([...map.values()], (a, b) =>
       a.normalizedName.localeCompare(b.normalizedName),
     );
   }, [selectedRows]);
@@ -157,12 +160,10 @@ function SavedKeywordsPage() {
       captureClientEvent("saved_keywords:bulk_remove", {
         count: result.deletedCount,
       });
-      toast.success(
-        `${result.deletedCount} keyword${result.deletedCount !== 1 ? "s" : ""} removed`,
-      );
+      toast.success(`已移除 ${result.deletedCount} 个关键词`);
     },
     onError: (error) => {
-      setRemoveError(getStandardErrorMessage(error, "Remove failed."));
+      setRemoveError(getStandardErrorMessage(error, "移除失败。"));
     },
   });
 
@@ -184,12 +185,10 @@ function SavedKeywordsPage() {
       setRowSelection({});
       setShowTagModal(false);
       void invalidateSavedKeywords();
-      toast.success(
-        `Updated tags for ${result.taggedCount} keyword${result.taggedCount !== 1 ? "s" : ""}`,
-      );
+      toast.success(`已更新 ${result.taggedCount} 个关键词的标签`);
     },
     onError: (error) => {
-      toast.error(getStandardErrorMessage(error, "Could not update tags"));
+      toast.error(getStandardErrorMessage(error, "无法更新标签"));
     },
   });
 
@@ -197,14 +196,10 @@ function SavedKeywordsPage() {
     mutationFn: () => refreshSavedKeywordMetrics({ data: { projectId } }),
     onSuccess: (result) => {
       void invalidateSavedKeywords();
-      toast.success(
-        `Updated stats for ${result.updated} keyword${result.updated !== 1 ? "s" : ""}`,
-      );
+      toast.success(`已更新 ${result.updated} 个关键词的数据`);
     },
     onError: (error) => {
-      toast.error(
-        getStandardErrorMessage(error, "Could not update keyword stats."),
-      );
+      toast.error(getStandardErrorMessage(error, "无法更新关键词数据。"));
     },
   });
 
@@ -314,9 +309,7 @@ function SavedKeywordsPage() {
             void navigator.clipboard.writeText(
               selectedRows.map((row) => row.keyword).join("\n"),
             );
-            toast.success(
-              `${selectedCount} keyword${selectedCount !== 1 ? "s" : ""} copied`,
-            );
+            toast.success(`已复制 ${selectedCount} 个关键词`);
           }}
           onOpenTags={() => setShowTagModal(true)}
           onExportCsv={() => exporter.exportSelectionCsv(selectedRows)}

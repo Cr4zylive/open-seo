@@ -31,6 +31,9 @@ export function ResultsView({
   onTabChange: (tab: ResultsTab) => void;
 }) {
   const { audit, pages, lighthouse, issues } = data;
+  const crawlStopped = issues.some(
+    (issue) => issue.issueType === "crawl-rate-limited",
+  );
   const hasPerformanceTab = lighthouse.length > 0;
   const activeTab =
     tab === "performance" && !hasPerformanceTab ? "issues" : tab;
@@ -39,43 +42,52 @@ export function ResultsView({
     () => pages.filter((page) => page.fetchClass === "blocked").length,
     [pages],
   );
+  const rateLimitedCount = useMemo(
+    () => pages.filter((page) => page.fetchClass === "rate_limited").length,
+    [pages],
+  );
 
   return (
     <>
       {blockedCount > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
-          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-          <p>
-            <span className="font-medium">
-              We were blocked on {blockedCount}{" "}
-              {blockedCount === 1 ? "page" : "pages"}.
-            </span>{" "}
-            <span className="text-base-content/70">
-              The site's bot protection challenged our crawler, so those pages
-              couldn't be audited. We don't have a workaround for this yet.
-              Desktop crawlers run from your own machine and usually get past
-              it: try{" "}
-              <a
-                className="link link-primary"
-                href="https://github.com/PhialsBasement/LibreCrawl"
-                target="_blank"
-                rel="noreferrer"
-              >
-                LibreCrawl
-              </a>{" "}
-              (free, open source) or{" "}
-              <a
-                className="link link-primary"
-                href="https://www.screamingfrog.co.uk/seo-spider/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Screaming Frog
-              </a>{" "}
-              (free up to 500 URLs).
-            </span>
-          </p>
-        </div>
+        <CrawlWarning
+          headline={`有 ${blockedCount} 个页面被拦截。`}
+        >
+          网站的机器人防护拦截了我们的爬虫，这些页面无法审计。目前还没有绕过方法。在你自己电脑上运行的桌面爬虫通常能通过：可以试试{" "}
+          <a
+            className="link link-primary"
+            href="https://github.com/PhialsBasement/LibreCrawl"
+            target="_blank"
+            rel="noreferrer"
+          >
+            LibreCrawl
+          </a>{" "}
+          （免费开源）或{" "}
+          <a
+            className="link link-primary"
+            href="https://www.screamingfrog.co.uk/seo-spider/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Screaming Frog
+          </a>{" "}
+          （免费额度最多 500 个网址）。
+        </CrawlWarning>
+      )}
+
+      {(rateLimitedCount > 0 || crawlStopped) && (
+        <CrawlWarning
+          headline={
+            crawlStopped
+              ? "抓取因网站限流提前停止。"
+              : `网站对 ${rateLimitedCount} 个页面进行了限流。`
+          }
+        >
+          {crawlStopped
+            ? "要求的冷却时间超过了审计时限，部分网址未被访问。本报告不完整。"
+            : "返回 429 Too Many Requests 的页面无法审计。"}
+          等限流重置后再重新运行审计，或请站点管理员允许 “OpenSEO-Audit” 爬虫。
+        </CrawlWarning>
       )}
 
       <StatsStrip
@@ -127,6 +139,25 @@ export function ResultsView({
         </div>
       </div>
     </>
+  );
+}
+
+/** Banner for pages the crawler could not read (bot protection, rate limits). */
+function CrawlWarning({
+  headline,
+  children,
+}: {
+  headline: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
+      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+      <p>
+        <span className="font-medium">{headline}</span>{" "}
+        <span className="text-base-content/70">{children}</span>
+      </p>
+    </div>
   );
 }
 
@@ -192,13 +223,13 @@ function ResultsHeader({
   onExport: (format: "csv" | "json" | "sheets") => void;
 }) {
   const tabs: Array<{ tab: ResultsTab; label: string }> = [
-    { tab: "issues", label: `Issues (${issueCount})` },
-    { tab: "pages", label: `Pages (${pageCount})` },
+    { tab: "issues", label: `问题 (${issueCount})` },
+    { tab: "pages", label: `页面 (${pageCount})` },
     ...(hasPerformanceTab
       ? [
           {
             tab: "performance" as const,
-            label: `Performance (${lighthouseCount})`,
+            label: `性能 (${lighthouseCount})`,
           },
         ]
       : []),
@@ -264,9 +295,9 @@ function StatsStrip({
   }, [issues]);
 
   const items: StatItem[] = [
-    { label: "Pages crawled", value: String(pagesCrawled) },
+    { label: "已抓取页面", value: String(pagesCrawled) },
     {
-      label: "Issues found",
+      label: "发现问题",
       value: String(issues.length),
       valueClass: issues.length === 0 ? "text-success" : "",
       sub: issues.length > 0 && (
@@ -280,14 +311,14 @@ function StatsStrip({
         </span>
       ),
     },
-    { label: "Avg response", value: `${averageResponseMs}ms` },
+    { label: "平均响应时间", value: `${averageResponseMs}ms` },
   ];
 
   if (totalLighthouse > 0) {
     items.push(
-      { label: "Lighthouse tests", value: String(totalLighthouse) },
+      { label: "Lighthouse 测试", value: String(totalLighthouse) },
       {
-        label: "Avg Lighthouse perf",
+        label: "Lighthouse 平均性能",
         value:
           lighthouseSummary.avgPerformance == null
             ? "-"
@@ -295,7 +326,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgPerformance),
       },
       {
-        label: "Avg Lighthouse SEO",
+        label: "Lighthouse 平均 SEO",
         value:
           lighthouseSummary.avgSeo == null
             ? "-"
@@ -303,7 +334,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgSeo),
       },
       {
-        label: "Avg Lighthouse a11y",
+        label: "Lighthouse 平均无障碍",
         value:
           lighthouseSummary.avgAccessibility == null
             ? "-"
@@ -311,7 +342,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgAccessibility),
       },
       {
-        label: "Lighthouse failures",
+        label: "Lighthouse 失败次数",
         value: String(lighthouseSummary.failed),
         valueClass:
           lighthouseSummary.failed > 0 ? "text-error" : "text-success",

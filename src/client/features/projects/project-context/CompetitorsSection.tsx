@@ -54,8 +54,8 @@ export function CompetitorsSection({
   return (
     <section className="space-y-3">
       <SectionHeader
-        title="Competitors"
-        hint="The sites you measure yourself against."
+        title="竞争对手"
+        hint="你用来对照自己的网站。"
         action={
           <button
             type="button"
@@ -63,7 +63,7 @@ export function CompetitorsSection({
             onClick={() => setAdding(true)}
           >
             <Plus className="size-3.5" />
-            Add competitor
+            添加竞争对手
           </button>
         }
       />
@@ -81,8 +81,7 @@ export function CompetitorsSection({
       {competitors.length === 0 ? (
         adding ? null : (
           <EmptyState>
-            No competitors yet. Add the sites you compete with, or ask SAM to
-            find them from your rankings and save them here.
+            还没有竞争对手。请添加你要对比的网站，或让 SAM 根据排名找出并保存到这里。
           </EmptyState>
         )
       ) : (
@@ -127,13 +126,13 @@ export function CompetitorsSection({
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"
-                    aria-label={`Edit ${competitor.domain}`}
+                    aria-label={`编辑 ${competitor.domain}`}
                     onClick={() => setEditingId(competitor.id)}
                   >
                     <Pencil className="size-3.5" />
                   </button>
                   <ConfirmDeleteButton
-                    label={`Remove ${competitor.domain}`}
+                    label={`移除 ${competitor.domain}`}
                     pending={update.isPending}
                     onConfirm={() =>
                       update.mutate([
@@ -190,26 +189,26 @@ function CompetitorForm({
           placeholder="competitor.com"
           maxLength={255}
           className="input input-bordered input-sm w-full"
-          aria-label="Competitor domain"
+          aria-label="竞争对手域名"
         />
         <input
           type="text"
           value={draft.name}
           onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-          placeholder="Name (optional)"
+          placeholder="名称（可选）"
           maxLength={120}
           className="input input-bordered input-sm w-full"
-          aria-label="Competitor name"
+          aria-label="竞争对手名称"
         />
       </div>
       <input
         type="text"
         value={draft.notes}
         onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-        placeholder="Why they matter — e.g. wins every comparison keyword (optional)"
+          placeholder="他们为何重要，例如：垄断了所有对比类关键词（可选）"
         maxLength={500}
         className="input input-bordered input-sm w-full"
-        aria-label="Competitor notes"
+          aria-label="竞争对手备注"
       />
       <FormActions
         pending={pending}

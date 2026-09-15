@@ -53,7 +53,7 @@ export async function exportTableToSheets(args: {
 }) {
   const { headers, rows, feature } = args;
   if (rows.length === 0) {
-    toast.error("No data to export");
+    toast.error("没有可导出的数据");
     return;
   }
   try {
@@ -64,6 +64,6 @@ export async function exportTableToSheets(args: {
     });
     setState({ isOpen: true, rowCount: rows.length });
   } catch (error) {
-    toast.error(getStandardErrorMessage(error, "Could not copy to clipboard"));
+    toast.error(getStandardErrorMessage(error, "无法复制到剪贴板"));
   }
 }

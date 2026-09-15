@@ -19,7 +19,7 @@ type PlatformRow = BrandLookupResult["perPlatform"][number];
 type MetricKey = "mentions" | "aiSearchVolume";
 
 const DOMAIN_LEVEL_TIP =
-  "AI search providers report mentions per domain, not per page. This number covers the whole domain — the cited pages below are limited to your scope.";
+  "AI 搜索提供商按域名报告提及次数，而不是按页面。此数字覆盖整个域名——下方的引用页面已限定在你选择的范围内。";
 
 /**
  * Marks a metric that could not be narrowed to a URL scope, so a page-scoped
@@ -31,7 +31,7 @@ function DomainLevelBadge() {
       className="tooltip badge badge-ghost badge-sm shrink-0 normal-case"
       data-tip={DOMAIN_LEVEL_TIP}
     >
-      Domain-level
+      域名级
     </span>
   );
 }
@@ -48,24 +48,23 @@ export function BrandLookupResults({ result, projectId }: Props) {
     if (allPlatformsErrored) {
       return (
         <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
-          AI mention data is temporarily unavailable for{" "}
-          <strong>{result.resolvedTarget}</strong>. Please try again shortly.
+          以下对象的 AI 提及数据暂时不可用：{" "}
+          <strong>{result.resolvedTarget}</strong>。请稍后重试。
         </div>
       );
     }
     return (
       <div className="space-y-3">
         <div className="rounded-lg border border-info/30 bg-info/10 p-4 text-sm">
-          No AI mentions found for <strong>{result.resolvedTarget}</strong>.
+          未找到以下对象的 AI 提及： <strong>{result.resolvedTarget}</strong>。
         </div>
         {erroredPlatforms.length > 0 ? (
           <p className="text-xs text-base-content/60">
-            Note:{" "}
+            提示：{" "}
             {erroredPlatforms
               .map((p) => formatPlatformLabel(p.platform))
-              .join(" and ")}{" "}
-            {erroredPlatforms.length === 1 ? "was" : "were"} unavailable — some
-            mentions may be missing.
+              .join("、")}{" "}
+            暂时不可用，部分提及数据可能缺失。
           </p>
         ) : null}
       </div>
@@ -111,7 +110,7 @@ function BrandHeader({ result }: { result: BrandLookupResult }) {
           {result.resolvedTarget}
         </h2>
         <span className="badge badge-ghost badge-sm">
-          {result.detectedTargetType}
+          {result.detectedTargetType === "domain" ? "域名" : "关键词"}
         </span>
         {result.scope ? (
           <span className="badge badge-ghost badge-sm">
@@ -120,7 +119,7 @@ function BrandHeader({ result }: { result: BrandLookupResult }) {
         ) : null}
       </div>
       <p className="text-xs text-base-content/50">
-        Updated {formatRelative(result.fetchedAt)}
+        更新时间 {formatRelative(result.fetchedAt)}
       </p>
     </section>
   );
@@ -131,16 +130,16 @@ function StatsCard({ result }: { result: BrandLookupResult }) {
     <section className="rounded-xl border border-base-300 bg-base-100">
       <div className="flex h-full flex-col divide-y divide-base-200">
         <StatBlock
-          label="Mentions"
-          tooltip="Estimated count of AI answers where the searched brand or domain appeared in the answer text or cited sources."
+          label="提及量"
+          tooltip="包含所查品牌或域名的 AI 回答预估数量，出现位置包括正文或引用来源。"
           value={result.totalMentions}
           perPlatform={result.perPlatform}
           metric="mentions"
           isDomainLevel={result.aggregatesAreDomainLevel}
         />
         <StatBlock
-          label="AI search volume"
-          tooltip="Estimated monthly search demand for prompts where the searched brand or domain appears in AI answers. This is prompt demand, not mention count."
+          label="AI 搜索量"
+          tooltip="品牌或域名出现在 AI 回答中时，相关提示词的预估月度搜索需求。此数据表示提示词需求量，不代表提及次数。"
           value={result.totalAiSearchVolume}
           perPlatform={result.perPlatform}
           metric="aiSearchVolume"
@@ -206,13 +205,13 @@ function PlatformStatRow({
         {row.platform === "chat_gpt" ? (
           <span
             className="tooltip z-20 inline-flex"
-            data-tip="DataForSEO indexes ChatGPT mentions for US English only — country selection is not available for this platform."
+            data-tip="DataForSEO 仅索引美国英语环境中的 ChatGPT 提及，因此此平台无法选择国家或地区。"
           >
             <Info className="size-3 text-base-content/40" />
           </span>
         ) : null}
         {row.status === "error" ? (
-          <span className="text-error">unavailable</span>
+          <span className="text-error">不可用</span>
         ) : null}
       </span>
       <span className="font-medium tabular-nums text-base-content/90">
@@ -226,9 +225,7 @@ function MentionTrendCard({ result }: { result: BrandLookupResult }) {
   return (
     <section className="overflow-hidden rounded-xl border border-base-300 bg-base-100">
       <div className="flex items-center justify-between gap-2 border-b border-base-300 px-4 py-3">
-        <h3 className="text-sm font-semibold">
-          Mention trend (last 12 months)
-        </h3>
+        <h3 className="text-sm font-semibold">提及趋势（最近 12 个月）</h3>
         {result.aggregatesAreDomainLevel ? <DomainLevelBadge /> : null}
       </div>
       <div className="p-4">
@@ -240,15 +237,15 @@ function MentionTrendCard({ result }: { result: BrandLookupResult }) {
 
 function formatRelative(iso: string): string {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "just now";
+  if (Number.isNaN(date.getTime())) return "刚刚";
 
   const diffMs = Date.now() - date.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
 
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 1) return "刚刚";
+  if (diffMin < 60) return `${diffMin} 分钟前`;
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffHr < 24) return `${diffHr} 小时前`;
   const diffDay = Math.floor(diffHr / 24);
-  return `${diffDay}d ago`;
+  return `${diffDay} 天前`;
 }

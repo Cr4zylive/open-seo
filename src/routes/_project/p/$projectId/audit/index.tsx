@@ -110,10 +110,10 @@ function AuditDetail({
         <div className="mx-auto max-w-3xl space-y-4">
           <div className="alert alert-error">
             <AlertCircle className="size-5" />
-            <span>We could not load this audit. It may have been deleted.</span>
+            <span>无法加载此审计，记录可能已被删除。</span>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={onBack}>
-            &larr; Back to audits
+            ← 返回审计列表
           </button>
         </div>
       </div>
@@ -136,11 +136,11 @@ function AuditDetail({
       <div className="mx-auto max-w-5xl space-y-4">
         <div className="space-y-1">
           <button className="btn btn-ghost btn-sm px-0" onClick={onBack}>
-            &larr; All audits
+            ← 全部审计
           </button>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="text-2xl font-semibold">
-              {status ? extractHostname(status.startUrl) : "Site Audit"}
+              {status ? extractHostname(status.startUrl) : "站点审计"}
             </h1>
             {status?.status !== "running" && status && (
               <StatusBadge status={status.status} />
@@ -148,7 +148,7 @@ function AuditDetail({
           </div>
           {status && (
             <p className="text-sm text-base-content/60">
-              Site audit &middot; Started {formatStartedAt(status.startedAt)}
+              站点审计 · 开始时间 {formatStartedAt(status.startedAt)}
             </p>
           )}
         </div>
@@ -167,13 +167,9 @@ function AuditDetail({
           >
             <AlertCircle className="size-5" />
             <div className="space-y-1">
-              <p className="font-medium">
-                Site audit couldn't fully crawl this website.
-              </p>
+              <p className="font-medium">站点审计未能完整抓取此网站。</p>
               <p>
-                Sorry! This site's bot protection blocked our crawler. We don't
-                have a workaround for this yet. Desktop crawlers run from your
-                own machine and usually get past it: try{" "}
+                抱歉，此站点的机器人防护拦截了我们的爬虫，目前还没有绕过办法。本机桌面爬虫通常能通过防护，可尝试{" "}
                 <a
                   className="link link-primary"
                   href="https://github.com/PhialsBasement/LibreCrawl"
@@ -182,7 +178,7 @@ function AuditDetail({
                 >
                   LibreCrawl
                 </a>{" "}
-                (free, open source) or{" "}
+                （免费开源）或{" "}
                 <a
                   className="link link-primary"
                   href="https://www.screamingfrog.co.uk/seo-spider/"
@@ -191,7 +187,7 @@ function AuditDetail({
                 >
                   Screaming Frog
                 </a>{" "}
-                (free up to 500 URLs).
+                （免费额度最多 500 个 URL）。
               </p>
             </div>
           </div>
@@ -202,19 +198,17 @@ function AuditDetail({
             <AlertCircle className="size-5" />
             <div className="space-y-1">
               <p className="font-medium">
-                This audit stopped early after {partialPageCount} page
-                {partialPageCount === 1 ? "" : "s"}.
+                此次审计提前停止，已抓取 {partialPageCount} 个页面。
               </p>
               <p>
-                The results below cover everything crawled before it stopped.
-                Run a new audit to try again, or email{" "}
+                以下结果涵盖停止前已抓取的内容。可运行新审计重试，或发送邮件至{" "}
                 <a
                   className="link link-primary"
                   href={`mailto:${SUPPORT_EMAIL}`}
                 >
                   {SUPPORT_EMAIL}
                 </a>{" "}
-                if this keeps happening.
+                寻求帮助。
               </p>
             </div>
           </div>
@@ -261,14 +255,14 @@ function ProgressCard({
   const isLighthousePhase = status.currentPhase === "lighthouse";
   const phaseLabel =
     status.currentPhase === "discovery"
-      ? "Discovery"
+      ? "发现页面"
       : status.currentPhase === "crawling"
-        ? "Crawling"
+        ? "抓取中"
         : status.currentPhase === "lighthouse"
           ? "Lighthouse"
           : status.currentPhase === "finalizing"
-            ? "Finalizing"
-            : (status.currentPhase ?? "Running");
+            ? "整理结果"
+            : (status.currentPhase ?? "运行中");
   const progress = isLighthousePhase ? lighthouseProgress : crawlProgress;
 
   const crawlProgressQuery = useQuery({
@@ -286,9 +280,7 @@ function ProgressCard({
           <div className="flex items-center justify-between">
             <h2 className="font-medium flex items-center gap-2">
               <Loader2 className="size-4 animate-spin text-primary" />
-              {isLighthousePhase
-                ? "Running Lighthouse checks"
-                : "Crawling pages"}
+              {isLighthousePhase ? "正在运行 Lighthouse 检查" : "正在抓取页面"}
             </h2>
             <span className="badge badge-ghost badge-sm">{phaseLabel}</span>
           </div>
@@ -309,7 +301,7 @@ function ProgressCard({
               </span>
             ) : (
               <span>
-                {status.pagesCrawled} / {status.pagesTotal} pages
+                {status.pagesCrawled} / {status.pagesTotal} 个页面
               </span>
             )}
             <span className="text-base-content/60">{progress}%</span>
@@ -321,10 +313,10 @@ function ProgressCard({
         <div className="card bg-base-100 border border-base-300">
           <div className="card-body gap-2 p-4">
             <h3 className="text-sm font-medium text-base-content/70">
-              Crawled Pages ({crawledUrls.length})
+              已抓取页面（{crawledUrls.length})
             </h3>
             <p className="text-xs text-base-content/50">
-              Updated {new Date(crawledUrls[0].crawledAt).toLocaleTimeString()}
+              更新时间 {new Date(crawledUrls[0].crawledAt).toLocaleTimeString()}
             </p>
             <div className="max-h-[400px] overflow-y-auto -mx-1">
               {crawledUrls.map((entry, i) => (

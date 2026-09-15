@@ -26,7 +26,7 @@ export function useAuthPageState(redirect: string | undefined) {
 
 export function AuthMethodChooser({
   googleLabel,
-  emailLabel = "Continue with email",
+  emailLabel = "使用邮箱继续",
   isBusy,
   disabled,
   onContinueWithGoogle,
@@ -48,7 +48,7 @@ export function AuthMethodChooser({
         disabled={disabled || isBusy}
       >
         <GoogleLogo />
-        {isBusy ? "Opening Google..." : googleLabel}
+        {isBusy ? "正在打开 Google…" : googleLabel}
       </button>
 
       <button

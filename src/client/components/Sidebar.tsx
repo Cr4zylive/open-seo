@@ -1,7 +1,10 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import type { LinkOptions } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ComponentType } from "react";
 import {
+  ArrowLeftRight,
+  Check,
   CircleHelp,
   CreditCard,
   LayoutGrid,
@@ -11,6 +14,8 @@ import {
   User,
   X,
 } from "lucide-react";
+import { organizationContextQueryOptions } from "@/client/features/team/organizationQueries";
+import { switchOrganization } from "@/serverFunctions/organization";
 import {
   connectNavGroup,
   getProjectNavGroups,
@@ -133,7 +138,7 @@ export function Sidebar({ projectId, onNavigate, onClose }: SidebarProps) {
             type="button"
             onClick={onClose}
             className="btn btn-ghost btn-sm btn-circle"
-            aria-label="Close sidebar"
+            aria-label="关闭侧边栏"
           >
             <X className="h-5 w-5" />
           </button>
@@ -154,13 +159,13 @@ export function Sidebar({ projectId, onNavigate, onClose }: SidebarProps) {
           <div role="tablist" className="tabs tabs-border w-full">
             <SidebarViewTab
               icon={LayoutGrid}
-              label="Browse"
+              label="浏览"
               active={view === "browse"}
               onClick={openBrowse}
             />
             <SidebarViewTab
               icon={MessageCircle}
-              label="Chat"
+              label="对话"
               active={view === "chat"}
               onClick={openChat}
             />
@@ -228,17 +233,38 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
   const { data: session } = useSession();
   const isHostedMode = isHostedClientAuthMode();
   const email = session?.user?.email;
+  const [isSwitching, setIsSwitching] = useState(false);
+
+  const orgContextQuery = useQuery({
+    ...organizationContextQueryOptions(),
+    enabled: isHostedMode && Boolean(email),
+  });
+  const organizations = orgContextQuery.data?.organizations ?? [];
+  const activeOrganizationId = orgContextQuery.data?.organizationId;
 
   const closeMenu = () => {
     closeDropdown();
     onNavigate?.();
   };
 
+  async function handleSwitchOrganization(organizationId: string) {
+    if (isSwitching || organizationId === activeOrganizationId) return;
+    setIsSwitching(true);
+    try {
+      await switchOrganization({ data: { organizationId } });
+      // Full reload: every cached query and the project-scoped URL belong to
+      // the previous organization.
+      window.location.assign("/");
+    } catch {
+      setIsSwitching(false);
+    }
+  }
+
   return (
     <div className="shrink-0 border-t border-base-300 px-2 py-2 pb-safe">
       <SidebarNavLink
         icon={CircleHelp}
-        label="Help & Community"
+        label="帮助与社区"
         onNavigate={onNavigate}
         linkProps={{ to: "/support" }}
       />
@@ -249,7 +275,7 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
             type="button"
             tabIndex={0}
             className={`${navItemClass} w-full`}
-            aria-label="Open account menu"
+            aria-label="打开账户菜单"
           >
             <User className="h-4 w-4 shrink-0" />
             <span className="truncate" data-ph-mask>
@@ -260,17 +286,49 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
             tabIndex={0}
             className="dropdown-content z-30 menu mb-1 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg"
           >
+            {organizations.length > 1 ? (
+              <>
+                <li className="menu-title flex flex-row items-center gap-1.5 max-w-full">
+                  <ArrowLeftRight className="h-3 w-3" />
+                  组织
+                </li>
+                {organizations.map((organization) => (
+                  <li key={organization.organizationId}>
+                    <button
+                      type="button"
+                      disabled={isSwitching}
+                      onClick={() =>
+                        void handleSwitchOrganization(
+                          organization.organizationId,
+                        )
+                      }
+                    >
+                      <span className="truncate">
+                        {organization.organizationName}
+                      </span>
+                      {organization.organizationId === activeOrganizationId ? (
+                        <Check className="h-4 w-4 shrink-0" />
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+                <li
+                  aria-hidden
+                  className="pointer-events-none my-1 h-px bg-base-300 p-0"
+                />
+              </>
+            ) : null}
             <li>
               <Link to="/settings" onClick={closeMenu}>
                 <Settings className="h-4 w-4" />
-                Settings
+                设置
               </Link>
             </li>
             {isHostedMode ? (
               <li>
                 <Link to={BILLING_ROUTE} onClick={closeMenu}>
                   <CreditCard className="h-4 w-4" />
-                  Billing
+                  账单
                 </Link>
               </li>
             ) : null}
@@ -288,7 +346,7 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
                     onClick={() => signOutAndRedirect()}
                   >
                     <LogOut className="h-4 w-4" />
-                    Sign out
+                    退出登录
                   </button>
                 </li>
               </>
@@ -298,7 +356,7 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
       ) : (
         <SidebarNavLink
           icon={Settings}
-          label="Settings"
+          label="设置"
           onNavigate={onNavigate}
           linkProps={{ to: "/settings" }}
         />

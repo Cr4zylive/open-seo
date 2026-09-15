@@ -11,16 +11,15 @@ import {
 } from "lucide-react";
 import { Markdown } from "@/client/components/Markdown";
 
-// Shared rendering for the chat agents (onboarding + SAM). The chats differ
-// only in which tools are available and how tool names become labels
-// (resolveToolLabel) plus which message actions their server supports
-// (onUndo/onEdit); the UI itself is identical and lives here.
+// Shared chat-message rendering. A chat supplies which tools are available and
+// how tool names become labels (resolveToolLabel) plus which message actions
+// its server supports (onUndo/onEdit); the UI itself lives here.
 
-export type ToolLabel = { running: string; done: string };
+type ToolLabel = { running: string; done: string };
 
 // Maps a UIMessage tool part type (e.g. "tool-get_serp_results") to its label,
-// or null to hide the badge entirely (onboarding hides tools it hasn't curated).
-export type ResolveToolLabel = (partType: string) => ToolLabel | null;
+// or null to hide the badge entirely.
+type ResolveToolLabel = (partType: string) => ToolLabel | null;
 
 // Turn a tool part type ("tool-get_serp_results") into a readable label
 // ("Get serp results"). Used for chats that expose too many tools to curate a
@@ -76,8 +75,8 @@ function CopyButton({ message }: { message: UIMessage }) {
   return (
     <button
       type="button"
-      aria-label="Copy message"
-      title="Copy"
+      aria-label="复制消息"
+      title="复制"
       className="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-base-content"
       onClick={() => {
         void navigator.clipboard.writeText(messageText(message));
@@ -112,8 +111,8 @@ function MessageActions({
       {onStartEdit ? (
         <button
           type="button"
-          aria-label="Edit message"
-          title="Edit and resend"
+          aria-label="编辑消息"
+          title="编辑并重新发送"
           className="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-base-content"
           onClick={onStartEdit}
         >
@@ -123,8 +122,8 @@ function MessageActions({
       {onUndo ? (
         <button
           type="button"
-          aria-label="Undo from this message"
-          title="Undo — remove this message and everything after it"
+          aria-label="从此消息撤回"
+          title="撤回此消息及其后的所有内容"
           className="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-base-content"
           onClick={onUndo}
         >
@@ -164,7 +163,7 @@ function ReasoningBlock({
             className={`size-3 transition-transform ${expanded ? "rotate-90" : ""}`}
           />
         )}
-        <span>{isStreaming ? "Thinking…" : "Thought process"}</span>
+        <span>{isStreaming ? "正在思考…" : "思考过程"}</span>
       </button>
       {expanded ? (
         <div className="mt-1.5 whitespace-pre-wrap border-l-2 border-base-300 pl-3 text-xs text-base-content/50">
@@ -273,14 +272,14 @@ export function ChatMessage({
               className="btn btn-ghost btn-xs"
               onClick={() => setEditing(false)}
             >
-              Cancel
+              取消
             </button>
             <button
               type="button"
               className="btn btn-primary btn-xs"
               onClick={submit}
             >
-              Save & resend
+              保存并重新发送
             </button>
           </div>
         </div>

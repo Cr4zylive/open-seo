@@ -33,6 +33,7 @@ function makeRow(
   return {
     trackingKeywordId: keyword,
     keyword,
+    matchCase: false,
     searchVolume: metrics.volume ?? null,
     keywordDifficulty: metrics.kd ?? null,
     cpc: metrics.cpc ?? null,
@@ -116,6 +117,19 @@ describe("applyFilters", () => {
       ).map((row) => row.keyword),
     ).toEqual(["unranked both"]);
   });
+
+  it("accepts Chinese punctuation between filter terms", () => {
+    expect(
+      applyFilters(rows, withFilters({ include: "desktop、mobile" })).map(
+        (row) => row.keyword,
+      ),
+    ).toEqual(["desktop unranked", "mobile unranked"]);
+    expect(
+      applyFilters(rows, withFilters({ exclude: "desktop，mobile" })).map(
+        (row) => row.keyword,
+      ),
+    ).toEqual(["ranked both", "unranked both"]);
+  });
 });
 
 describe("applyDomainListFilters", () => {
@@ -192,8 +206,8 @@ describe("getDomainListFilterOptions", () => {
     ]);
 
     expect(options.devices).toEqual([
-      { value: "desktop", label: "Desktop" },
-      { value: "mobile", label: "Mobile" },
+      { value: "desktop", label: "桌面端" },
+      { value: "mobile", label: "移动端" },
     ]);
     expect(options.locations).toEqual([
       { value: "2250", label: "FR" },

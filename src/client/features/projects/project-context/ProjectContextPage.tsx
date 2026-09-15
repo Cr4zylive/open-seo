@@ -5,7 +5,6 @@ import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { getProjectContext } from "@/serverFunctions/projectContext";
 import {
   PROJECT_CONTEXT_SECTION_KEYS,
-  PROJECT_CONTEXT_SECTION_LABELS,
   PROSE_MAX_CHARS,
   type ProjectContextSectionKey,
 } from "@/types/schemas/projectContext";
@@ -24,22 +23,29 @@ import {
   type ProjectContextData,
 } from "./shared";
 
+const SECTION_LABELS: Record<ProjectContextSectionKey, string> = {
+  business_overview: "业务概览",
+  current_goal: "当前目标",
+  positioning: "定位",
+  writing_preferences: "写作偏好",
+};
+
 const SECTION_HINTS: Record<ProjectContextSectionKey, string> = {
-  business_overview: "What you sell, who buys it, and where.",
-  current_goal: "What you're pushing for right now, and by when.",
-  positioning: "Why someone picks you over the alternatives.",
-  writing_preferences: "Voice, words to avoid, topics that are off-limits.",
+  business_overview: "卖什么、卖给谁、卖到哪里。",
+  current_goal: "眼下要推进的目标，以及截止时间。",
+  positioning: "用户为什么选你而不是其他选择。",
+  writing_preferences: "语气、要避免的词、不宜触及的话题。",
 };
 
 const SECTION_PLACEHOLDERS: Record<ProjectContextSectionKey, string> = {
   business_overview:
-    "e.g. Booking software for independent restaurants in the US and Canada. Buyers are owner-operators, not marketers.",
+    "例如：面向美国和加拿大独立餐厅的预订软件。买家是店主，不是市场人员。",
   current_goal:
-    "e.g. Double organic signups by Q4. Comparison pages are the current bet.",
+    "例如：第四季度将自然注册量翻倍。当前重点是对比页。",
   positioning:
-    "e.g. The only booking tool that sets up in an afternoon. Cheaper than the incumbents, simpler than the DIY stack.",
+    "例如：唯一能在一天下午完成上线的预订工具。比老牌产品更便宜，比自己拼装更简单。",
   writing_preferences:
-    "e.g. Plain and direct, no hype. Never say 'seamless' or 'game-changing'. Don't write about competitor pricing.",
+    "例如：直白、不夸张。不要说「无缝」或「颠覆性」。不要写竞品定价。",
 };
 
 export function ProjectContextPage({ projectId }: { projectId: string }) {
@@ -65,7 +71,7 @@ export function ProjectContextPage({ projectId }: { projectId: string }) {
         <span className="text-sm">
           {getStandardErrorMessage(
             contextQuery.error,
-            "Failed to load project context",
+            "无法加载项目上下文",
           )}
         </span>
       </div>
@@ -79,9 +85,7 @@ export function ProjectContextPage({ projectId }: { projectId: string }) {
     // draft, open form, or edit state can carry over to another project.
     <div key={projectId} className="space-y-8">
       <p className="text-sm text-base-content/70">
-        What SAM, Claude Code, and any connected MCP client know about this
-        project. They read it before they work and write back what they learn,
-        so correct anything that looks wrong.
+        SAM、Claude Code 以及任何已连接的 MCP 客户端对这个项目的了解。它们在动手前会先读取这些内容，并写回学到的信息，所以看起来不对的地方请直接改正。
       </p>
 
       <ProseSections
@@ -162,8 +166,7 @@ function ProseSections({
     <form onSubmit={handleSubmit} className="space-y-5">
       {missingSections.length === PROJECT_CONTEXT_SECTION_KEYS.length ? (
         <EmptyState>
-          Nothing written down yet. Fill in what you can — or ask SAM to draft
-          it from your site and confirm what it got right.
+          还没有任何记录。先填你知道的内容，或让 SAM 根据网站起草，再核对它写对了哪些。
         </EmptyState>
       ) : null}
 
@@ -176,12 +179,12 @@ function ProseSections({
                 htmlFor={`context-${key}`}
                 className="text-sm font-medium text-base-content"
               >
-                {PROJECT_CONTEXT_SECTION_LABELS[key]}
+                {SECTION_LABELS[key]}
               </label>
               {section ? (
                 <Provenance by={section.updatedBy} at={section.updatedAt} />
               ) : (
-                <span className="text-xs text-base-content/40">Empty</span>
+                <span className="text-xs text-base-content/40">空</span>
               )}
             </div>
             <p className="text-xs text-base-content/50">{SECTION_HINTS[key]}</p>
@@ -216,7 +219,7 @@ function ProseSections({
           className="btn btn-primary btn-sm"
           disabled={update.isPending || changed.length === 0}
         >
-          Save changes
+          保存更改
         </button>
       </div>
     </form>
@@ -236,14 +239,13 @@ function CustomSections({
   return (
     <section className="space-y-3">
       <SectionHeader
-        title="Custom sections"
-        hint="Anything an agent wrote down that didn't fit the sections above."
+        title="自定义分区"
+        hint="智能体记下的、放不进以上分区的内容。"
       />
 
       {customSections.length === 0 ? (
         <EmptyState>
-          Nothing here yet. Agents add a section when they learn something
-          important that has nowhere else to live.
+          这里还没有内容。智能体学到重要信息却无处归类时，会新增一个分区。
         </EmptyState>
       ) : (
         <div className="space-y-3">
@@ -277,13 +279,13 @@ function CustomSections({
                     <button
                       type="button"
                       className="btn btn-ghost btn-xs"
-                      aria-label={`Edit ${custom.title ?? custom.slug}`}
+                      aria-label={`编辑 ${custom.title ?? custom.slug}`}
                       onClick={() => setEditingSlug(custom.slug)}
                     >
                       <Pencil className="size-3.5" />
                     </button>
                     <ConfirmDeleteButton
-                      label={`Delete ${custom.title ?? custom.slug}`}
+                      label={`删除 ${custom.title ?? custom.slug}`}
                       pending={update.isPending}
                       onConfirm={() =>
                         update.mutate([{ deleteCustomSection: custom.slug }])
@@ -333,7 +335,7 @@ function CustomSectionForm({
         placeholder={custom.slug}
         maxLength={120}
         className="input input-bordered input-sm w-full"
-        aria-label="Section title"
+        aria-label="分区标题"
       />
       <textarea
         value={content}
@@ -341,7 +343,7 @@ function CustomSectionForm({
         rows={5}
         maxLength={PROSE_MAX_CHARS}
         className="textarea textarea-bordered w-full text-sm"
-        aria-label="Section content"
+        aria-label="分区内容"
       />
       <FormActions
         pending={pending}
@@ -364,13 +366,13 @@ function ResearchLog({
   return (
     <section className="space-y-3">
       <SectionHeader
-        title="Research log"
-        hint="What's already been looked up, so nobody buys the same data twice."
+        title="研究日志"
+        hint="已经查过什么，避免重复购买同一份数据。"
       />
 
       {researchLog.length === 0 ? (
         <EmptyState>
-          Nothing logged yet. Agents record paid research here as they run it.
+          还没有日志。智能体在执行付费研究时会记录在这里。
         </EmptyState>
       ) : (
         <ul className={listClass}>
@@ -388,7 +390,7 @@ function ResearchLog({
               </div>
               <RowActions>
                 <ConfirmDeleteButton
-                  label={`Delete log entry from ${entry.entryDate}`}
+                  label={`删除 ${entry.entryDate} 的日志`}
                   pending={update.isPending}
                   onConfirm={() =>
                     update.mutate([{ removeResearchLog: [entry.id] }])
