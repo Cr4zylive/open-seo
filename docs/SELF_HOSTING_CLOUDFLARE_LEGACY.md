@@ -39,6 +39,33 @@ pnpm run deploy
 pnpm exec wrangler secret put DATAFORSEO_API_KEY --name open-seo-audit
 ```
 
+## Updating (Cloudflare Git / Workers Builds)
+
+v0.1.8 split site audits into a second Worker named `open-seo-audit`. The app Worker binds to it as `AUDIT_ENGINE`. Cloudflare's Git integration still defaults to `npx wrangler deploy`, which only uploads `open-seo`, so the upload fails with **API 10143** (`Service binding 'AUDIT_ENGINE' references Worker 'open-seo-audit' which was not found`). Workers Builds also ignores Wrangler's `build.command`, so this has to be set in the dashboard.
+
+One-time, on the `open-seo` Worker: **Settings → Build → Builds configuration**:
+
+1. Keep your existing **Build command** (for example `pnpm run build`).
+2. Set **Deploy command** to:
+
+   ```bash
+   pnpm run deploy
+   ```
+
+3. If you use non-production branch builds, set **Non-production branch deploy command** to the same `pnpm run deploy`. The default `npx wrangler versions upload` has the same 10143 failure until `open-seo-audit` exists, and it still would not update the audit Worker.
+
+That command applies D1 migrations, builds both bundles, deploys `open-seo-audit` first, then deploys `open-seo`. After this dashboard change, later OpenSEO releases that add Workers stay on `pnpm run deploy` in `package.json` — you should not need to touch the dashboard again for this.
+
+Then, once, copy the DataForSEO secret onto the new Worker (same value as `open-seo`):
+
+```bash
+pnpm exec wrangler secret put DATAFORSEO_API_KEY --name open-seo-audit
+```
+
+Or in the dashboard: Workers → `open-seo-audit` → Settings → Variables and Secrets.
+
+Redeploy after those two steps. Leave `wrangler.jsonc` / `wrangler.audit.jsonc` resource IDs as this account's KV/D1/R2 — do not replace them with upstream IDs.
+
 ## Giving teammates access
 
 1. Open Cloudflare Zero Trust.
@@ -68,7 +95,9 @@ Replace `open-seo` with your bucket name if you changed it.
 - `Variables & Secrets`: `TEAM_DOMAIN` (for example `https://your-team.cloudflareaccess.com`), `POLICY_AUD` (the Access application audience tag), and `DATAFORSEO_API_KEY` are set. The `open-seo-audit` worker needs `DATAFORSEO_API_KEY` too.
 - Manual Wrangler deployments: the binding IDs in `wrangler.jsonc` match your resources.
 
-`https://<your-worker-hostname>/api/health` reports runtime configuration checks and database status. For server errors, open the Worker `Logs` or run `pnpm exec wrangler tail`.
+`https://<your-worker-hostname>/api/health` reports runtime configuration checks and database status. For server errors, open the Worker `Logs` or run `pnpm exec wrangler tail`. Site audits run in `open-seo-audit`: `pnpm exec wrangler tail open-seo-audit`.
+
+**Deploy fails with API 10143 / `AUDIT_ENGINE` / `open-seo-audit` was not found.** Cloudflare Git is still running `npx wrangler deploy`. Follow [Updating (Cloudflare Git / Workers Builds)](#updating-cloudflare-git--workers-builds) above.
 
 **Migrating to the current flow** is not supported yet — the new deploy provisions fresh resources, so your data would not move. Keep using this page.
 

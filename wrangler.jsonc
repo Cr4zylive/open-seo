@@ -55,6 +55,11 @@
   // bound cross-script here (the Cloudflare API rejects deleting the class
   // below while any binding still references its name). Cancel + GDPR
   // erasure go through this service binding's AuditEngine entrypoint.
+  //
+  // Cloudflare Git / Workers Builds defaults to `npx wrangler deploy`, which
+  // only uploads this Worker and then fails with API 10143 until
+  // open-seo-audit exists. Set the dashboard Deploy command to
+  // `pnpm run deploy` (see docs/SELF_HOSTING_CLOUDFLARE_LEGACY.md).
   "services": [
     {
       "binding": "AUDIT_ENGINE",
