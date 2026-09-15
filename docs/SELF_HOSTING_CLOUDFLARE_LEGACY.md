@@ -91,6 +91,23 @@ pnpm exec wrangler r2 bucket lifecycle add open-seo dataforseo-cache-expiry data
 
 Replace `open-seo` with your bucket name if you changed it.
 
+## TEAM_DOMAIN and POLICY_AUD
+
+These two Worker variables are how OpenSEO checks Cloudflare Access login. They are **not** created by pasting anything into `.env.selfhost` on a Git / Wrangler install. Set them on the `open-seo` Worker: **Settings → Variables and Secrets**. `wrangler.jsonc` has `keep_vars: true`, so later `pnpm run deploy` keeps them.
+
+**TEAM_DOMAIN** is your Zero Trust team URL, including `https://`. Example: `https://your-team.cloudflareaccess.com`. Find it in [Zero Trust](https://one.dash.cloudflare.com) → **Settings → Custom Pages** (the team domain), or copy the `iss` value from an Access JWT.
+
+**POLICY_AUD** is the Application Audience (AUD) tag of the Access application that protects this Worker's hostname — a long hex string, unique per application. It is not an API token and not the Access policy name.
+
+1. Open [Zero Trust](https://one.dash.cloudflare.com) → **Access controls → Applications**.
+2. Open the application whose domain is your OpenSEO Worker (`*.workers.dev` or your custom domain).
+3. **Configure → Additional settings**.
+4. Copy **Application Audience (AUD) Tag** into `POLICY_AUD`.
+
+If the Worker has no Access application in front of it, create one for that hostname first (self-hosted email login is fine), then copy the AUD. [Cloudflare's JWT docs](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag) show the same screen.
+
+Do **not** follow the current [Alchemy self-host guide](./SELF_HOSTING_CLOUDFLARE.md) to “fix” a missing `POLICY_AUD`. `pnpm deploy:selfhost` provisions a **new** D1, KV, and R2. This install's data stays in the D1 bound in `wrangler.jsonc` (`database_id` `a3103d08-79bf-4bd1-bec4-3ab2c9aa78c7` on this fork).
+
 ## Troubleshooting
 
 **Login fails or OpenSEO doesn't load.** Re-check, on your Worker under `Settings`:
@@ -106,6 +123,13 @@ Replace `open-seo` with your bucket name if you changed it.
 **Deploy fails with API 10211 / Durable Object migration / `/workers/scripts/open-seo/versions`.** The build used versioned upload (`wrangler versions upload`), which cannot apply Durable Object migrations. 0.1.8 must go out as `wrangler deploy`. Set **both** Deploy command and Non-production branch deploy command to `pnpm run deploy`, then retry. After those migrations are on the account, later uploads without new Durable Object tags can use versioned deploys again.
 
 **Deploy fails with API 10074 / `new-sqlite-class` / `AuditScratchpad` already depended on.** Workers Builds rewrites every `wrangler deploy` in the job to the dashboard-connected Worker (`open-seo`) via `WRANGLER_CI_OVERRIDE_NAME`. The audit Worker's v1 `new_sqlite_classes: ["AuditScratchpad"]` then hits `open-seo`, which already created that class in v3. Current `pnpm run deploy` unsets that override for the `open-seo-audit` upload — retry the build; no dashboard change is required. The failed upload does not move the migration tag, so v4/v5 on `open-seo` still apply on the next successful deploy.
+
+**Projects or keywords look empty after login.** Two different causes, both recoverable:
+
+1. **v0.1.8 shared workspace.** Older installs gave each Access user their own workspace. The app now opens a shared workspace, which starts empty. If the dashboard shows a yellow banner, click **迁移工作区** — that folds the old per-user projects into the shared workspace. This is not a database wipe.
+2. **New D1 from Alchemy.** If you ran `pnpm deploy:selfhost`, you are on a new empty database. The old D1 is still in the account (Workers → D1, database `open-seo`, id `a3103d08-79bf-4bd1-bec4-3ab2c9aa78c7`). Point the `open-seo` Worker `DB` binding back at that database; do not `alchemy destroy` the selfhost stage until you have confirmed which D1 holds the rows.
+
+Onboarding SAM chats stored in `OnboardingChatAgent` were deleted on purpose in the 0.1.8 Durable Object migration. Project data, keywords, and audits live in D1, not in that class.
 
 **Migrating to the current flow** is not supported yet — the new deploy provisions fresh resources, so your data would not move. Keep using this page.
 

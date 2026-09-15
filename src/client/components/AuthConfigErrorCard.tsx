@@ -1,8 +1,10 @@
 import { ShieldAlert } from "lucide-react";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
 
-const CLOUDFLARE_SETUP_GUIDE_URL =
-  "https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_CLOUDFLARE.md#2-configure-authentication-and-secrets";
+const HOSTED_SETUP_GUIDE_URL =
+  "https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_CLOUDFLARE.md";
+const ACCESS_AUD_GUIDE_URL =
+  "https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/#get-your-aud-tag";
 
 type AuthConfigErrorCardProps = {
   message: string;
@@ -36,10 +38,12 @@ export function AuthConfigErrorCard({
           </p>
         ) : (
           <p className="text-sm text-base-content/70">
-            Cloudflare Access 模式需要在部署环境中设置
-            <code className="mx-1">TEAM_DOMAIN</code>（完整 HTTPS 地址）和
-            <code className="mx-1">POLICY_AUD</code>，并使用 Access
-            应用保护此主机名。
+            在 Worker「设置 → 变量和密钥」里填写
+            <code className="mx-1">TEAM_DOMAIN</code>
+            （形如 <code>https://你的团队.cloudflareaccess.com</code>）和
+            <code className="mx-1">POLICY_AUD</code>
+            。AUD 从 Zero Trust → Access 应用 → Configure → Additional settings
+            的 Application Audience (AUD) Tag 复制。
           </p>
         )}
 
@@ -51,7 +55,7 @@ export function AuthConfigErrorCard({
           ) : null}
           <a
             className="btn btn-primary btn-sm"
-            href={CLOUDFLARE_SETUP_GUIDE_URL}
+            href={isHostedMode ? HOSTED_SETUP_GUIDE_URL : ACCESS_AUD_GUIDE_URL}
             target="_blank"
             rel="noreferrer"
           >
