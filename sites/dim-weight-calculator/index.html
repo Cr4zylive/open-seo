@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UPS dimensional weight calculator (Daily 139 / Retail 166)</title>
+    <meta
+      name="description"
+      content="Calculate UPS billable weight from carton inches and actual pounds. Uses the published Daily (139) and Retail (166) dimensional-weight divisors."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>UPS dimensional weight calculator</h1>
+      <p class="lede">
+        One carton. UPS Daily or Retail rates. The billable weight is whichever
+        is higher: the scale weight, or length × width × height ÷ the divisor.
+      </p>
+
+      <form id="calc">
+        <div class="grid">
+          <label>
+            Length (inches)
+            <input
+              name="length"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="any"
+              required
+              value="16"
+            />
+          </label>
+          <label>
+            Width (inches)
+            <input
+              name="width"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="any"
+              required
+              value="12"
+            />
+          </label>
+          <label>
+            Height (inches)
+            <input
+              name="height"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="any"
+              required
+              value="12"
+            />
+          </label>
+          <label>
+            Actual weight (lb)
+            <input
+              name="actual"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              step="any"
+              required
+              value="10"
+            />
+          </label>
+          <label class="full">
+            UPS rate type
+            <select name="rateType">
+              <option value="daily">Daily rates — divisor 139</option>
+              <option value="retail">
+                Retail / counter rates — divisor 166
+              </option>
+            </select>
+          </label>
+          <button class="full" type="submit">Calculate billable weight</button>
+        </div>
+      </form>
+
+      <div id="result" hidden></div>
+
+      <section class="formula">
+        <h2>How UPS calculates it</h2>
+        <ol>
+          <li>
+            Measure each side at the longest point and round to the
+            <strong>nearest whole inch</strong>.
+          </li>
+          <li>
+            Multiply: <code>length × width × height</code> for cubic inches.
+          </li>
+          <li>
+            Divide by the DIM factor:
+            <strong>139</strong> for Daily rates, <strong>166</strong> for
+            Retail rates.
+          </li>
+          <li>
+            If the result is not a whole number, go up to the
+            <strong>next whole pound</strong>.
+          </li>
+          <li>
+            UPS charges the <strong>greater of</strong> that dimensional weight
+            and the actual scale weight.
+          </li>
+        </ol>
+        <p>
+          Worked example on this page: 16 × 12 × 12 in = 2,304 in³. Daily: 2,304
+          ÷ 139 ≈ 16.58 → <strong>17 lb</strong>. Retail: 2,304 ÷ 166 ≈ 13.88 →
+          <strong>14 lb</strong>. A 10 lb scale weight still bills at 17 lb on
+          Daily rates.
+        </p>
+        <p>
+          Source:
+          <a
+            href="https://www.ups.com/us/en/support/shipping-support/shipping-dimensions-weight"
+            rel="noopener"
+            >UPS Shipping Dimensions and Weight</a
+          >. Account contracts can use a different divisor. This page is not a
+          UPS product and does not quote a price.
+        </p>
+      </section>
+
+      <section class="disclaimer">
+        <h2>What this page is not</h2>
+        <p>
+          It is not FedEx, DHL, USPS, or air-freight chargeable weight. Those
+          carriers publish other divisors. It is not legal or shipping advice.
+        </p>
+      </section>
+
+      <footer>
+        English (United States) first. Formula last checked September 2026.
+      </footer>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
