@@ -1,234 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
-import { captureClientEvent } from "@/client/lib/posthog";
-import {
-  computeNextStep,
-  isStepDone,
-  STEP_ORDER,
-} from "@/client/features/dashboard/dashboardSteps";
+import { sort } from "remeda";
+import { DashboardOnboarding } from "./DashboardOnboarding";
 import {
   AuditHealthCard,
   BacklinkPulseCard,
   GscCard,
 } from "@/client/features/dashboard/DashboardCards";
 import { Ga4Card } from "@/client/features/dashboard/Ga4Card";
-import { McpConnectCard } from "@/client/features/dashboard/McpConnectCard";
 import { WorkspaceMergeBanner } from "@/client/features/dashboard/WorkspaceMergeBanner";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
-import type { DashboardActivation } from "@/server/features/dashboard/services/DashboardService";
 import {
   getDashboardActivation,
   getDashboardOverview,
-  markDashboardCompetitorClicked,
   refreshDashboardBacklinkSnapshot,
 } from "@/serverFunctions/dashboard";
-import { setProjectDomain } from "@/serverFunctions/projects";
-import type { DashboardHeroStep } from "@/types/schemas/dashboard";
-
-const HERO_COPY: Record<
-  DashboardHeroStep,
-  { title: string; body: string; cta: string }
-> = {
-  domain: {
-    title: "您正在运营哪个网站？",
-    body: "设置项目域名后，本页的反向链接和站点审计卡片即可开始工作。",
-    cta: "保存",
-  },
-  mcp: {
-    title: "连接您的 AI 智能体",
-    body: "OpenSEO 可供 Claude 等 AI 智能体调用。完成一次连接后，即可让智能体使用 OpenSEO 制定 SEO 策略。",
-    cta: "查看连接方法",
-  },
-  gsc: {
-    title: "连接 Search Console",
-    body: "直接获取 Google 中真实的查询和点击数据。",
-    cta: "连接",
-  },
-  competitor: {
-    title: "分析竞争对手",
-    body: "输入竞争对手域名，查看其排名关键词和反向链接来源。",
-    cta: "打开域名查询",
-  },
-};
-
-function scrollToCard(id: string) {
-  document.getElementById(id)?.scrollIntoView({
-    behavior: "smooth",
-    block: "center",
-  });
-}
-
-// Users paste full URLs; store the bare host like settings expects.
-function normalizeDomainInput(value: string): string {
-  return value
-    .trim()
-    .replace(/^https?:\/\//i, "")
-    .replace(/\/.*$/, "");
-}
-
-function OnboardingChecklist({
-  projectId,
-  activation,
-}: {
-  projectId: string;
-  activation: DashboardActivation;
-}) {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [domainInput, setDomainInput] = useState("");
-  // null = follow the first actionable step; set once the user pages with ‹ ›.
-  const [viewedIndex, setViewedIndex] = useState<number | null>(null);
-  const invalidateActivation = () =>
-    void queryClient.invalidateQueries({
-      queryKey: ["dashboardActivation", projectId],
-    });
-
-  const competitorClickMutation = useMutation({
-    mutationFn: () => markDashboardCompetitorClicked({ data: { projectId } }),
-    onSuccess: invalidateActivation,
-  });
-  const domainMutation = useMutation({
-    mutationFn: (domain: string) =>
-      setProjectDomain({ data: { projectId, domain } }),
-    onSuccess: () => {
-      invalidateActivation();
-      void queryClient.invalidateQueries({
-        queryKey: ["dashboardOverview", projectId],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["projects"] });
-    },
-    onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "无法保存域名，请重试。")),
-  });
-
-  // Hidden once every step is done.
-  const nextStep = computeNextStep(activation);
-  if (!nextStep) return null;
-
-  const index = viewedIndex ?? STEP_ORDER.indexOf(nextStep);
-  const step = STEP_ORDER[index];
-  const copy = HERO_COPY[step];
-  const done = isStepDone(activation, step);
-
-  const page = (delta: number) =>
-    setViewedIndex(Math.min(Math.max(index + delta, 0), STEP_ORDER.length - 1));
-
-  const onSubmitDomain = () => {
-    const domain = normalizeDomainInput(domainInput);
-    if (!domain) return;
-    captureClientEvent("dashboard:next_move_click", { step: "domain" });
-    domainMutation.mutate(domain);
-  };
-
-  // Only the gsc/competitor steps use the fallback CTA button — domain
-  // renders an inline form and mcp renders a Link.
-  const onCta = () => {
-    captureClientEvent("dashboard:next_move_click", { step });
-    if (step === "gsc") {
-      scrollToCard("connect-gsc");
-    } else if (step === "competitor") {
-      competitorClickMutation.mutate();
-      void navigate({ to: "/p/$projectId/domain", params: { projectId } });
-    }
-  };
-
-  return (
-    <div className="rounded-xl border border-primary/25 bg-primary/5 shadow-sm">
-      <div className="flex items-center justify-between gap-4 px-5 pt-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-primary">
-          入门清单
-        </p>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            className={`btn btn-ghost btn-xs btn-square ${
-              index === 0 ? "invisible" : ""
-            }`}
-            aria-label="上一步"
-            disabled={index === 0}
-            onClick={() => page(-1)}
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <span className="text-xs tabular-nums text-base-content/60">
-            {index + 1} / {STEP_ORDER.length}
-          </span>
-          <button
-            type="button"
-            className={`btn btn-ghost btn-xs btn-square ${
-              index === STEP_ORDER.length - 1 ? "invisible" : ""
-            }`}
-            aria-label="下一步"
-            disabled={index === STEP_ORDER.length - 1}
-            onClick={() => page(1)}
-          >
-            <ChevronRight className="size-4" />
-          </button>
-        </div>
-      </div>
-      <div className="flex flex-row flex-wrap items-center justify-between gap-4 p-5 pt-2">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold">{copy.title}</h2>
-          <p className="mt-1 max-w-xl text-sm text-base-content/70">
-            {copy.body}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-3">
-          {done ? (
-            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-success">
-              <Check className="size-4" />
-              已完成
-            </span>
-          ) : step === "domain" ? (
-            <form
-              className="join"
-              onSubmit={(event) => {
-                event.preventDefault();
-                onSubmitDomain();
-              }}
-            >
-              <input
-                type="text"
-                className="input input-bordered join-item w-52"
-                placeholder="acme.com"
-                value={domainInput}
-                onChange={(event) => setDomainInput(event.target.value)}
-                aria-label="您的网站域名"
-              />
-              <button
-                type="submit"
-                className="btn btn-primary join-item"
-                disabled={
-                  domainMutation.isPending ||
-                  normalizeDomainInput(domainInput) === ""
-                }
-              >
-                {copy.cta}
-              </button>
-            </form>
-          ) : step === "mcp" ? (
-            <Link
-              to="/ai"
-              className="link link-primary text-sm font-medium"
-              onClick={() =>
-                captureClientEvent("dashboard:next_move_click", { step })
-              }
-            >
-              {copy.cta} →
-            </Link>
-          ) : (
-            <button type="button" className="btn btn-primary" onClick={onCta}>
-              {copy.cta}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function DashboardPage({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
@@ -299,6 +85,52 @@ export function DashboardPage({ projectId }: { projectId: string }) {
   const gscConnected = activation.gsc.connected;
   const ga4Connected = activation.ga4.connected;
 
+  const cards = [
+    ...(gscConnected
+      ? [
+          {
+            key: "gsc",
+            hasData: true,
+            node: <GscCard projectId={projectId} connected />,
+          },
+        ]
+      : []),
+    ...(ga4Connected || !activation.ga4.cardDismissedAt
+      ? [
+          {
+            key: "ga4",
+            hasData: ga4Connected,
+            node: <Ga4Card projectId={projectId} connected={ga4Connected} />,
+          },
+        ]
+      : []),
+    {
+      key: "audit",
+      hasData: overview?.audit != null,
+      node: (
+        <AuditHealthCard
+          projectId={projectId}
+          audit={overview?.audit ?? null}
+        />
+      ),
+    },
+    ...(showBacklinks
+      ? [
+          {
+            key: "backlinks",
+            hasData: overview?.backlinks != null || refreshMutation.isPending,
+            node: (
+              <BacklinkPulseCard
+                projectId={projectId}
+                backlinks={overview?.backlinks ?? null}
+                refreshing={refreshMutation.isPending}
+              />
+            ),
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-8">
       <div className="mx-auto flex max-w-5xl flex-col gap-5">
@@ -306,75 +138,20 @@ export function DashboardPage({ projectId }: { projectId: string }) {
 
         <WorkspaceMergeBanner />
 
-        <OnboardingChecklist projectId={projectId} activation={activation} />
+        <DashboardOnboarding
+          key={projectId}
+          projectId={projectId}
+          activation={activation}
+        />
 
         {/* Every card is half width on large screens (only the checklist spans).
           Cards with data render before setup pitches and empty states. */}
         <div className="grid items-start gap-5 lg:grid-cols-2">
-          {[
-            // Array order is the within-bucket order after the data-first sort:
-            // the MCP pitch leads the setup cards.
-            ...(activation.mcp.firstToolCallAt || activation.mcp.cardDismissedAt
-              ? []
-              : [
-                  {
-                    key: "mcp",
-                    hasData: false,
-                    node: (
-                      <McpConnectCard
-                        projectId={projectId}
-                        activation={activation}
-                      />
-                    ),
-                  },
-                ]),
-            {
-              key: "gsc",
-              hasData: gscConnected,
-              node: <GscCard projectId={projectId} connected={gscConnected} />,
-            },
-            ...(ga4Connected || !activation.ga4.cardDismissedAt
-              ? [
-                  {
-                    key: "ga4",
-                    hasData: ga4Connected,
-                    node: (
-                      <Ga4Card projectId={projectId} connected={ga4Connected} />
-                    ),
-                  },
-                ]
-              : []),
-            {
-              key: "audit",
-              hasData: overview?.audit != null,
-              node: (
-                <AuditHealthCard
-                  projectId={projectId}
-                  audit={overview?.audit ?? null}
-                />
-              ),
-            },
-            ...(showBacklinks
-              ? [
-                  {
-                    key: "backlinks",
-                    hasData:
-                      overview?.backlinks != null || refreshMutation.isPending,
-                    node: (
-                      <BacklinkPulseCard
-                        projectId={projectId}
-                        backlinks={overview?.backlinks ?? null}
-                        refreshing={refreshMutation.isPending}
-                      />
-                    ),
-                  },
-                ]
-              : []),
-          ]
-            .toSorted((a, b) => Number(b.hasData) - Number(a.hasData))
-            .map((card) => (
+          {sort(cards, (a, b) => Number(b.hasData) - Number(a.hasData)).map(
+            (card) => (
               <div key={card.key}>{card.node}</div>
-            ))}
+            ),
+          )}
         </div>
       </div>
     </div>

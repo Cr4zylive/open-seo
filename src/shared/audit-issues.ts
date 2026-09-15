@@ -20,9 +20,25 @@ export const AUDIT_ISSUE_TYPES = {
     severity: "critical",
     title: "爬虫被拦截",
     explanation:
-      "网站返回了机器人验证或拒绝访问响应，例如 Cloudflare 验证、403 或 429，未返回正常页面。因此该页面无法审计，搜索引擎等其他爬虫也可能遇到类似阻碍。",
+      "网站返回了机器人验证或拒绝访问响应，例如 Cloudflare 验证或 403，未返回正常页面。因此该页面无法审计，搜索引擎等其他爬虫也可能遇到类似阻碍。",
     howToFix:
       "如果您拥有此网站，请在 WAF 或机器人防护设置中将“OpenSEO-Audit”用户代理加入允许名单。使用 Cloudflare 时，可创建 WAF 自定义规则，在用户代理包含“OpenSEO-Audit”时跳过机器人防护；部分免费方案可能需要适当放宽防护。完成后重新运行审计。",
+  },
+  "rate-limited-page": {
+    severity: "warning",
+    title: "触发限流（429）",
+    explanation:
+      "服务器返回了 429 Too Many Requests，因此无法审计此页面。如果网站要求的冷却时间仍在审计时限内，爬虫会等待后再重试。",
+    howToFix:
+      '请提高爬虫的速率限制，或在限流规则中将“OpenSEO-Audit”用户代理加入允许名单（Cloudflare：添加匹配该用户代理的限流例外）。然后重新运行审计。如果限制很严，也可以用更少页面再跑一次。',
+  },
+  "crawl-rate-limited": {
+    severity: "warning",
+    title: "抓取因限流提前停止",
+    explanation:
+      "网站要求的等待时间超过了本次审计允许的时限，我们已停止继续请求页面。本报告不完整；未抓取的网址不会被记为失效或限流。",
+    howToFix:
+      "等网站限流重置后再重新运行审计，或请站点管理员允许 OpenSEO-Audit 爬虫。",
   },
   "server-error": {
     severity: "critical",

@@ -29,7 +29,7 @@ export function WorkspaceMergeBanner() {
       void queryClient.invalidateQueries();
     },
     onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "无法迁移工作区，请重试。")),
+      toast.error(getStandardErrorMessage(error, "无法迁移工作区，请重试。"))
   });
 
   if (!statusQuery.data || statusQuery.data.legacyWorkspaceCount === 0) {

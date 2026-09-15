@@ -1,3 +1,4 @@
+import { AgentSetup } from "@/client/features/ai-mcp/AgentSetup";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowUpRight, ShieldAlert } from "lucide-react";
 import { getAuthMode, isHostedClientAuthMode } from "@/lib/auth-mode";
@@ -32,11 +33,11 @@ const SKILLS_MANUAL_INSTALL = `git clone https://github.com/every-app/open-seo.g
 
 # Codex
 mkdir -p ~/.codex/skills
-cp -R open-seo/.agents/skills/* ~/.codex/skills/
+cp -R open-seo/plugins/openseo/skills/* ~/.codex/skills/
 
 # Claude Code
 mkdir -p ~/.claude/skills
-cp -R open-seo/.agents/skills/* ~/.claude/skills/`;
+cp -R open-seo/plugins/openseo/skills/* ~/.claude/skills/`;
 
 export const Route = createFileRoute("/_app/ai")({
   component: AiPage,
@@ -56,6 +57,10 @@ function AiPage() {
           将 AI 智能体连接到 OpenSEO，即可从编辑器或对话中执行关键词研究、SERP
           分析、域名查询和反向链接检查。
         </p>
+
+        <section className="mt-8 rounded-xl border border-base-300 p-5">
+          <AgentSetup />
+        </section>
 
         {getAuthMode(import.meta.env.AUTH_MODE) === "cloudflare_access" ? (
           <div className="alert alert-warning mt-6 text-sm" role="alert">
@@ -140,11 +145,11 @@ function AiPage() {
             >
               <ol className="ml-5 list-decimal space-y-1.5 text-sm text-base-content/70 leading-relaxed">
                 <li>
-                  打开 <span className="text-base-content">设置</span> →{" "}
+                  打开 <span className="text-base-content">自定义</span> →{" "}
                   <span className="text-base-content">连接器</span>。
                 </li>
                 <li>
-                  点击{" "}
+                  点击 <span className="text-base-content">添加</span>（或 +），然后选择{" "}
                   <span className="font-medium text-base-content">
                     添加自定义连接器
                   </span>
@@ -163,7 +168,7 @@ function AiPage() {
                 </li>
               </ol>
               <p className="text-xs text-base-content/55 leading-relaxed">
-                需要 Claude Pro、Max、Team 或 Enterprise 方案。
+                适用于 Claude 免费版、Pro、Max、Team 和 Enterprise。免费版支持一个自定义连接器。
               </p>
             </Collapsible>
 

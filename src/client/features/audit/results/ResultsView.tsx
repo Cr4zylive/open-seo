@@ -31,6 +31,9 @@ export function ResultsView({
   onTabChange: (tab: ResultsTab) => void;
 }) {
   const { audit, pages, lighthouse, issues } = data;
+  const crawlStopped = issues.some(
+    (issue) => issue.issueType === "crawl-rate-limited",
+  );
   const hasPerformanceTab = lighthouse.length > 0;
   const activeTab =
     tab === "performance" && !hasPerformanceTab ? "issues" : tab;
@@ -39,39 +42,52 @@ export function ResultsView({
     () => pages.filter((page) => page.fetchClass === "blocked").length,
     [pages],
   );
+  const rateLimitedCount = useMemo(
+    () => pages.filter((page) => page.fetchClass === "rate_limited").length,
+    [pages],
+  );
 
   return (
     <>
       {blockedCount > 0 && (
-        <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
-          <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-          <p>
-            <span className="font-medium">
-              有 {blockedCount} 个页面阻止了抓取。
-            </span>{" "}
-            <span className="text-base-content/70">
-              网站的机器人防护拦截了爬虫，因此无法审计这些页面。目前还没有绕过办法。本机桌面爬虫通常能通过防护，可尝试{" "}
-              <a
-                className="link link-primary"
-                href="https://github.com/PhialsBasement/LibreCrawl"
-                target="_blank"
-                rel="noreferrer"
-              >
-                LibreCrawl
-              </a>{" "}
-              （免费开源）或{" "}
-              <a
-                className="link link-primary"
-                href="https://www.screamingfrog.co.uk/seo-spider/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Screaming Frog
-              </a>{" "}
-              （免费额度最多 500 个 URL）。
-            </span>
-          </p>
-        </div>
+        <CrawlWarning
+          headline={`有 ${blockedCount} 个页面被拦截。`}
+        >
+          网站的机器人防护拦截了我们的爬虫，这些页面无法审计。目前还没有绕过方法。在你自己电脑上运行的桌面爬虫通常能通过：可以试试{" "}
+          <a
+            className="link link-primary"
+            href="https://github.com/PhialsBasement/LibreCrawl"
+            target="_blank"
+            rel="noreferrer"
+          >
+            LibreCrawl
+          </a>{" "}
+          （免费开源）或{" "}
+          <a
+            className="link link-primary"
+            href="https://www.screamingfrog.co.uk/seo-spider/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Screaming Frog
+          </a>{" "}
+          （免费额度最多 500 个网址）。
+        </CrawlWarning>
+      )}
+
+      {(rateLimitedCount > 0 || crawlStopped) && (
+        <CrawlWarning
+          headline={
+            crawlStopped
+              ? "抓取因网站限流提前停止。"
+              : `网站对 ${rateLimitedCount} 个页面进行了限流。`
+          }
+        >
+          {crawlStopped
+            ? "要求的冷却时间超过了审计时限，部分网址未被访问。本报告不完整。"
+            : "返回 429 Too Many Requests 的页面无法审计。"}
+          等限流重置后再重新运行审计，或请站点管理员允许 “OpenSEO-Audit” 爬虫。
+        </CrawlWarning>
       )}
 
       <StatsStrip
@@ -123,6 +139,25 @@ export function ResultsView({
         </div>
       </div>
     </>
+  );
+}
+
+/** Banner for pages the crawler could not read (bot protection, rate limits). */
+function CrawlWarning({
+  headline,
+  children,
+}: {
+  headline: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
+      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
+      <p>
+        <span className="font-medium">{headline}</span>{" "}
+        <span className="text-base-content/70">{children}</span>
+      </p>
+    </div>
   );
 }
 
@@ -188,13 +223,13 @@ function ResultsHeader({
   onExport: (format: "csv" | "json" | "sheets") => void;
 }) {
   const tabs: Array<{ tab: ResultsTab; label: string }> = [
-    { tab: "issues", label: `问题（${issueCount}）` },
-    { tab: "pages", label: `页面（${pageCount}）` },
+    { tab: "issues", label: `问题 (${issueCount})` },
+    { tab: "pages", label: `页面 (${pageCount})` },
     ...(hasPerformanceTab
       ? [
           {
             tab: "performance" as const,
-            label: `性能（${lighthouseCount}）`,
+            label: `性能 (${lighthouseCount})`,
           },
         ]
       : []),

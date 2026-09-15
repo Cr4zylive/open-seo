@@ -3,8 +3,11 @@ import { useAgent } from "agents/react";
 // variant skips the client->server transcript sync Think doesn't support.
 import { useAgentChat } from "@cloudflare/think/react";
 import { useEffect, useRef } from "react";
-import { ChatComposer } from "@/client/features/onboarding/OnboardingChatParts";
+import { RotateCcw } from "lucide-react";
+import { findLast } from "remeda";
+import { ChatComposer } from "@/client/features/sam/ChatComposer";
 import { invalidateSamSessions } from "@/client/features/sam/samQueries";
+import { captureClientEvent } from "@/client/lib/posthog";
 import {
   ChatMessage,
   humanizeToolLabel,
@@ -30,18 +33,56 @@ export function SamConversation({
   // session id. The WebSocket is authorized in the Worker (src/server.ts) before
   // it reaches the DO; billing gates come back as normal assistant messages.
   const agent = useAgent({ agent: "sam-chat", name: sessionId });
-  const { messages, sendMessage, setMessages, clearHistory, status } =
-    useAgentChat({ agent });
+  // SAM streams dense tool-input deltas; unthrottled per-chunk store fanout
+  // re-renders the transcript per delta and trips React #185 (cloudflare/agents#1361).
+  const {
+    messages,
+    sendMessage,
+    setMessages,
+    clearHistory,
+    status,
+    stop,
+    isRecovering,
+    connectionError,
+  } = useAgentChat({ agent, experimental_throttle: 50 });
 
-  const isBusy = status === "submitted" || status === "streaming";
+  // isRecovering: the DO is settling a turn a reset interrupted (persisting
+  // the partial reply). Nothing can be sent into it until that lands.
+  const isBusy =
+    status === "submitted" || status === "streaming" || isRecovering;
   const { scrollRef, onScroll, pinToBottom } = useStickToBottom(
     messages,
     status,
   );
-  const sendText = (text: string) => {
+  // Client-side send counts, to set against the server's sam:turn events: a
+  // send with no matching turn is a message that never reached the DO.
+  const sendText = (
+    text: string,
+    source: "composer" | "suggestion" | "edit" | "retry" = "composer",
+  ) => {
     pinToBottom();
+    captureClientEvent("sam:message_send", {
+      session_id: sessionId,
+      project_id: projectId,
+      source,
+      chars: text.length,
+    });
     void sendMessage({ text });
   };
+
+  // What the user sees as a failure: the turn-level error banner below, or
+  // the socket dropping (code/reason from the close frame). The server side
+  // of the same failure is the sam:turn event with status "error".
+  useEffect(() => {
+    if (status !== "error" && !connectionError) return;
+    captureClientEvent("sam:client_error", {
+      session_id: sessionId,
+      project_id: projectId,
+      kind: connectionError ? "connection" : "turn",
+      code: connectionError?.code,
+      reason: connectionError?.reason,
+    });
+  }, [status, connectionError, sessionId, projectId]);
 
   // Rewind the server-side conversation to before `messageId`: the DO aborts
   // any in-flight turn, then deletes the message and everything after it. Sync
@@ -63,8 +104,25 @@ export function SamConversation({
   };
 
   const undoFrom = (messageId: string) => void rewindTo(messageId);
-  const editAndResend = async (messageId: string, newText: string) => {
-    if (await rewindTo(messageId)) sendText(newText);
+  const editAndResend = async (
+    messageId: string,
+    newText: string,
+    source: "edit" | "retry" = "edit",
+  ) => {
+    if (await rewindTo(messageId)) sendText(newText, source);
+  };
+  // Retry after a failed turn goes through the same rewind-then-resend path
+  // as edit, so the failed partial reply is deleted server-side before the
+  // new one streams in. Each click is one human-gated turn, metered per step;
+  // the DO never re-runs a turn on its own (see onChatRecovery).
+  const lastUserMessage = findLast(messages, (m) => m.role === "user");
+  const retryLast = () => {
+    if (!lastUserMessage) return;
+    const text = lastUserMessage.parts
+      .filter((part) => part.type === "text")
+      .map((part) => part.text)
+      .join("\n");
+    void editAndResend(lastUserMessage.id, text, "retry");
   };
 
   // The DO names the session from its first message during the turn, so refresh
@@ -156,8 +214,27 @@ export function SamConversation({
             </div>
           ) : null}
 
+          {isRecovering ? (
+            <p className="text-xs text-base-content/50">
+              正在保存被中断的回复…
+            </p>
+          ) : null}
+
           {status === "error" ? (
-            <p className="text-sm text-error">出现问题，请重试。</p>
+            <div className="flex flex-wrap items-center gap-3 text-sm text-error">
+              <span>SAM 在完成这条回复前停止了。</span>
+              {lastUserMessage ? (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-error btn-xs gap-1"
+                  disabled={isBusy}
+                  onClick={retryLast}
+                >
+                  <RotateCcw className="size-3" />
+                  重试
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           {showSuggestions ? (
@@ -167,7 +244,7 @@ export function SamConversation({
                   key={question}
                   type="button"
                   className="rounded-full border border-base-300 bg-base-100 px-3 py-1.5 text-xs font-medium text-base-content/70 transition-colors hover:border-primary/50 hover:text-base-content"
-                  onClick={() => sendText(question)}
+                  onClick={() => sendText(question, "suggestion")}
                 >
                   {question}
                 </button>
@@ -182,6 +259,7 @@ export function SamConversation({
           <ChatComposer
             busy={isBusy}
             onSend={sendText}
+            onStop={() => void stop()}
             placeholder="让 SAM 帮你研究、分析或追踪 SEO 数据…"
           />
         </div>

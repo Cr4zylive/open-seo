@@ -13,7 +13,7 @@ const STANDARD_MESSAGES: Record<ErrorCode, string> = {
     "当前账户已达到审计容量上限，请删除项目中的旧审计后再创建新审计。",
   AUDIT_PAGE_LIMIT_EXCEEDED: `免费套餐每次最多审计 ${FREE_MAX_AUDIT_PAGES} 个页面。升级后可运行更大规模的审计。`,
   AUDIT_ALREADY_RUNNING:
-    "已有一项审计正在运行，请等待其完成或删除后再开始新审计。",
+    "同时运行的审计已达上限，请等待完成或删除后再开始新审计。",
   VALIDATION_ERROR: "请检查输入内容后重试。",
   CRAWL_TARGET_BLOCKED: "安全策略已阻止此抓取目标。",
   BACKLINKS_BILLING_ISSUE: "已连接的 DataForSEO 账户存在账单或余额问题。",

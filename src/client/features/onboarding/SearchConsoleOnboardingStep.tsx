@@ -3,30 +3,32 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleGlyph } from "@/client/features/gsc/GoogleGlyph";
+import { GoogleLinkErrorAlert } from "@/client/features/integrations/GoogleLinkErrorAlert";
 import { SelfHostedSetupWarning } from "@/client/features/gsc/SelfHostedSetupWarning";
 import {
   SitePicker,
   type GscSiteSelection,
 } from "@/client/features/gsc/SitePicker";
-import { startGoogleLink } from "@/client/features/integrations/startGoogleLink";
+import {
+  startGoogleLink,
+  useGoogleLinkPending,
+} from "@/client/features/integrations/startGoogleLink";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import { captureClientEvent } from "@/client/lib/posthog";
-import { ProjectMarketFields } from "@/client/features/projects/ProjectMarketFields";
-import type { ProjectMarket } from "@/client/features/projects/types";
 import {
   getGscConnection,
   listGscSites,
   setGscSite,
 } from "@/serverFunctions/gsc";
-import { getProjects, setProjectMarket } from "@/serverFunctions/projects";
+import { getProjects } from "@/serverFunctions/projects";
 
 const GRANT_STATUS_KEY = ["gscGrantStatus"];
 
 /**
  * Onboarding step for connecting Google Search Console: link the account-level
- * OAuth grant, then bind a verified property to the user's first project —
- * the same binding the project's Integrations page does — so it's done in one
- * place.
+ * OAuth grant, then bind a verified property to the user's first project — the
+ * same binding the project's Integrations page does. The step lives before the
+ * agent-setup screen because most users leave onboarding from that screen.
  */
 export function SearchConsoleOnboardingStep() {
   const projectsQuery = useQuery({
@@ -36,68 +38,17 @@ export function SearchConsoleOnboardingStep() {
   const project = projectsQuery.data?.[0];
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">
-          现在连接 Google Search Console 吗？
-        </h2>
-
-        {project ? <GscConnect projectId={project.id} /> : <Checking />}
-
-        <p className="hidden sm:block text-xs leading-relaxed text-base-content/55">
-          目前可通过 OpenSEO MCP 使用 Search Console
-          数据，应用内的原生功能也在持续完善中。
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          现在连接 Google Search Console？
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-base-content/60">
+          把真实点击和查询词接入 OpenSEO 和你的 AI 智能体。也可以稍后在仪表盘完成。
         </p>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">选择国家或地区与语言</h2>
-        {project ? <DefaultMarketPicker project={project} /> : <Checking />}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Sets the project's default market during onboarding, so keyword, SERP, and
- * domain data lands on the user's market from their first search instead of
- * defaulting to the US. Saves on change — the step's Continue button belongs
- * to the wizard, so a separate Save here would be easy to walk past.
- */
-function DefaultMarketPicker({
-  project,
-}: {
-  project: { id: string; locationCode: number; languageCode: string };
-}) {
-  const queryClient = useQueryClient();
-  const [market, setMarket] = React.useState<ProjectMarket>({
-    locationCode: project.locationCode,
-    languageCode: project.languageCode,
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: (next: ProjectMarket) =>
-      setProjectMarket({ data: { projectId: project.id, ...next } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["projects"] }),
-    onError: (error) => toast.error(getStandardErrorMessage(error)),
-  });
-
-  const handleChange = (next: ProjectMarket) => {
-    setMarket(next);
-    saveMutation.mutate(next);
-  };
-
-  return (
-    <div className="space-y-2">
-      <ProjectMarketFields
-        value={market}
-        onChange={handleChange}
-        hideLanguageOnMobile
-      />
-      <p className="hidden sm:block text-xs leading-relaxed text-base-content/55">
-        关键词、SERP
-        和域名数据将默认使用此国家或地区与语言。你可以在项目设置中随时更改。
-      </p>
+      {project ? <GscConnect projectId={project.id} /> : <Checking />}
     </div>
   );
 }
@@ -105,6 +56,7 @@ function DefaultMarketPicker({
 /** Connect + pick-a-property flow, scoped to a known project. */
 function GscConnect({ projectId }: { projectId: string }) {
   const queryClient = useQueryClient();
+  const linking = useGoogleLinkPending();
   const [selection, setSelection] = React.useState<GscSiteSelection | null>(
     null,
   );
@@ -148,12 +100,16 @@ function GscConnect({ projectId }: { projectId: string }) {
     onSuccess: () => {
       captureClientEvent("gsc:property_select");
       void queryClient.invalidateQueries({ queryKey: connectionKey });
+      // The dashboard checklist reads the same connection state.
+      void queryClient.invalidateQueries({ queryKey: ["projects"] });
     },
     onError: (error) => toast.error(getStandardErrorMessage(error)),
   });
 
   const handleConnect = () => {
     captureClientEvent("onboarding:gsc_connect_clicked");
+    // Google sends the user back to this URL, and the step lives in the URL,
+    // so they land on this screen again with the grant in place.
     void startGoogleLink("gsc", window.location.href);
   };
 
@@ -170,7 +126,7 @@ function GscConnect({ projectId }: { projectId: string }) {
           <Check className="size-3.5" />
         </span>
         <span className="text-base-content/80">
-          已连接 <span className="font-mono">{connection?.siteUrl}</span>。
+          已连接到 <span className="font-mono">{connection?.siteUrl}</span>。
         </span>
       </div>
     );
@@ -178,29 +134,44 @@ function GscConnect({ projectId }: { projectId: string }) {
 
   if (hasGrant) {
     return (
-      <SitePicker
-        loading={sitesQuery.isLoading}
-        error={sitesQuery.isError}
-        accounts={accounts}
-        selection={selection}
-        onSelect={setSelection}
-        onSave={() => selection && setSiteMutation.mutate(selection)}
-        saving={setSiteMutation.isPending}
-        onRetry={() => void sitesQuery.refetch()}
-        onReconnect={handleConnect}
-      />
+      <div className="space-y-4">
+        <GoogleLinkErrorAlert provider="gsc" />
+        <fieldset disabled={linking}>
+          <SitePicker
+            linking={linking}
+            loading={sitesQuery.isLoading}
+            error={sitesQuery.isError}
+            accounts={accounts}
+            selection={selection}
+            onSelect={setSelection}
+            onSave={() => selection && setSiteMutation.mutate(selection)}
+            saving={setSiteMutation.isPending}
+            onRetry={() => void sitesQuery.refetch()}
+            onReconnect={handleConnect}
+          />
+        </fieldset>
+      </div>
     );
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleConnect}
-      className="inline-flex items-center gap-2.5 rounded-lg border border-base-300 bg-base-100 px-4 py-2.5 text-sm font-semibold text-base-content shadow-sm transition hover:bg-base-200 hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-    >
-      <GoogleGlyph className="size-[18px]" />
-      连接 Google
-    </button>
+    <div className="space-y-4">
+      <GoogleLinkErrorAlert provider="gsc" />
+      <button
+        type="button"
+        onClick={handleConnect}
+        disabled={linking}
+        aria-busy={linking}
+        className="inline-flex items-center gap-2.5 rounded-lg border border-base-300 bg-base-100 px-4 py-2.5 text-sm font-semibold text-base-content shadow-sm transition hover:bg-base-200 hover:shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        {linking ? (
+          <span className="loading loading-spinner loading-xs" />
+        ) : (
+          <GoogleGlyph className="size-[18px]" />
+        )}
+        {linking ? "正在打开 Google…" : "连接 Google"}
+      </button>
+    </div>
   );
 }
 
@@ -208,7 +179,7 @@ function Checking() {
   return (
     <div className="flex items-center gap-2 text-sm text-base-content/50">
       <span className="loading loading-spinner loading-sm" />
-      正在检查…
+      检查中…
     </div>
   );
 }

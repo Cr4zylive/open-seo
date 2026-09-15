@@ -18,27 +18,44 @@ export function AddKeywordsPanel({
   onCancel: () => void;
 }) {
   const [keywordInput, setKeywordInput] = useState("");
+  const [matchCase, setMatchCase] = useState(false);
   const mutation = useMutation({
     mutationFn: (kws: string[]) =>
-      addTrackingKeywords({ data: { projectId, configId, keywords: kws } }),
+      addTrackingKeywords({
+        data: { projectId, configId, keywords: kws, matchCase },
+      }),
     onSuccess: (result) => {
       setKeywordInput("");
       onSuccess(result);
     },
     onError: (error) => {
-      toast.error(getStandardErrorMessage(error, "关键词添加失败"));
+      toast.error(getStandardErrorMessage(error, "添加关键词失败"));
     },
   });
   const isPending = mutation.isPending;
   return (
     <div className="flex gap-2 items-end">
-      <textarea
-        className="textarea textarea-bordered textarea-sm flex-1"
-        rows={3}
-        placeholder="输入关键词，每行一个"
-        value={keywordInput}
-        onChange={(e) => setKeywordInput(e.target.value)}
-      />
+      <div className="flex flex-col gap-1 flex-1">
+        <textarea
+          className="textarea textarea-bordered textarea-sm w-full"
+          rows={3}
+          placeholder="输入关键词，每行一个"
+          value={keywordInput}
+          onChange={(e) => setKeywordInput(e.target.value)}
+        />
+        <label
+          className="flex items-center gap-2 text-xs cursor-pointer w-fit"
+          title="按输入的大小写追踪，而不是全部转成小写。品牌名大写时，Google 可能返回不同结果。"
+        >
+          <input
+            type="checkbox"
+            className="checkbox checkbox-xs [--radius-selector:0.25rem]"
+            checked={matchCase}
+            onChange={(e) => setMatchCase(e.target.checked)}
+          />
+          区分大小写
+        </label>
+      </div>
       <div className="flex flex-col gap-1">
         <button
           className="btn btn-primary btn-sm"
@@ -49,7 +66,7 @@ export function AddKeywordsPanel({
               .filter(Boolean);
             if (lines.some((l) => l.length > MAX_TRACKED_KEYWORD_LENGTH)) {
               toast.error(
-                `每个关键词最多可输入 ${MAX_TRACKED_KEYWORD_LENGTH} 个字符。`,
+                `关键词不能超过 ${MAX_TRACKED_KEYWORD_LENGTH} 个字符。`,
               );
               return;
             }

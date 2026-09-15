@@ -38,8 +38,7 @@ function ProjectsPage() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">项目</h1>
             <p className="mt-1 text-sm text-base-content/60">
-              每个项目都是独立工作区，拥有各自的 Search
-              Console、排名追踪和审计数据。
+              每个项目都有各自的 Search Console、排名追踪和审计数据。
             </p>
           </div>
           <button
