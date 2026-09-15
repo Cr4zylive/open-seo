@@ -56,7 +56,9 @@ One-time, on the `open-seo` Worker: **Settings → Build → Builds configuratio
 
 3. Set **Non-production branch deploy command** to the same `pnpm run deploy`. This is the command Cloudflare Git runs for every branch that is not the production branch (including `_tmp_*` feature branches). Its default is `npx wrangler versions upload`, which fails with 10211 until the 0.1.8 Durable Object migrations have been applied by a real `wrangler deploy`.
 
-That command applies D1 migrations, builds both bundles, deploys `open-seo-audit` first with `wrangler deploy`, then deploys `open-seo` the same way. After this dashboard change, later OpenSEO releases that add Workers stay on `pnpm run deploy` in `package.json` — you should not need to touch the dashboard again for this.
+That command applies D1 migrations, builds both bundles, deploys `open-seo-audit` first with `wrangler deploy`, then deploys `open-seo` the same way. Workers Builds also sets `WRANGLER_CI_OVERRIDE_NAME=open-seo` on the job; the deploy script unsets that for the audit upload so its Durable Object migrations are not applied to `open-seo`. After this dashboard change, later OpenSEO releases that add Workers stay on `pnpm run deploy` in `package.json` — you should not need to touch the dashboard again for this.
+
+The Git-connected API token must be allowed to **create** `open-seo-audit`, not only edit `open-seo`. Account-level Workers Scripts Edit is enough; a token scoped to the `open-seo` script alone is not.
 
 Then, once, copy the DataForSEO secret onto the new Worker (same value as `open-seo`):
 
@@ -102,6 +104,8 @@ Replace `open-seo` with your bucket name if you changed it.
 **Deploy fails with API 10143 / `AUDIT_ENGINE` / `open-seo-audit` was not found.** Cloudflare Git is still running `npx wrangler deploy` (or `versions upload`) for only the app Worker. Follow [Updating (Cloudflare Git / Workers Builds)](#updating-cloudflare-git--workers-builds) above.
 
 **Deploy fails with API 10211 / Durable Object migration / `/workers/scripts/open-seo/versions`.** The build used versioned upload (`wrangler versions upload`), which cannot apply Durable Object migrations. 0.1.8 must go out as `wrangler deploy`. Set **both** Deploy command and Non-production branch deploy command to `pnpm run deploy`, then retry. After those migrations are on the account, later uploads without new Durable Object tags can use versioned deploys again.
+
+**Deploy fails with API 10074 / `new-sqlite-class` / `AuditScratchpad` already depended on.** Workers Builds rewrites every `wrangler deploy` in the job to the dashboard-connected Worker (`open-seo`) via `WRANGLER_CI_OVERRIDE_NAME`. The audit Worker's v1 `new_sqlite_classes: ["AuditScratchpad"]` then hits `open-seo`, which already created that class in v3. Current `pnpm run deploy` unsets that override for the `open-seo-audit` upload — retry the build; no dashboard change is required. The failed upload does not move the migration tag, so v4/v5 on `open-seo` still apply on the next successful deploy.
 
 **Migrating to the current flow** is not supported yet — the new deploy provisions fresh resources, so your data would not move. Keep using this page.
 
