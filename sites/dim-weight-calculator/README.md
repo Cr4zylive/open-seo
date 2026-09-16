@@ -7,7 +7,11 @@ cd sites/dim-weight-calculator
 node --test
 python3 -m http.server 4177
 # open http://127.0.0.1:4177/
+npx wrangler deploy --dry-run
+# after a custom domain: npx wrangler deploy
 ```
+
+Deploy as its own Cloudflare Worker (Static Assets). Do not attach this folder to the OpenSEO Worker.
 
 Formula last checked against [UPS Shipping Dimensions and Weight](https://www.ups.com/us/en/support/shipping-support/shipping-dimensions-weight): nearest inch, Daily divisor **139**, Retail divisor **166**, fractional DIM weight rounds up, billable = max(actual, DIM).
 
