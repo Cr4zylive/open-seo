@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NEC conduit fill calculator (THHN in EMT, IMC, RMC, PVC)</title>
+    <meta
+      name="description"
+      content="Check conduit fill for THHN/THWN using NEC Chapter 9 Tables 1, 4, and 5. EMT, IMC, RMC, and PVC Schedule 40/80."
+    />
+    <link rel="canonical" href="https://racewayfill.com/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://racewayfill.com/" />
+    <meta
+      property="og:title"
+      content="NEC conduit fill calculator (THHN in EMT, IMC, RMC, PVC)"
+    />
+    <meta
+      property="og:description"
+      content="Check raceway fill with NEC Chapter 9 Tables 1, 4, and 5."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Raceway Fill",
+        "url": "https://racewayfill.com/",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <nav>
+        <a href="./" aria-current="page">Conduit fill</a>
+        <a href="./voltage-drop.html">Voltage drop</a>
+        <a href="./wire-size.html">Wire size</a>
+      </nav>
+      <h1>NEC conduit fill calculator</h1>
+      <p class="lede">
+        One raceway. THHN/THWN conductors. Fill limits are 53% / 31% / 40%
+        from NEC Chapter 9 Table 1.
+      </p>
+      <form id="calc">
+        <div class="grid">
+          <label>
+            Conduit type
+            <select name="type">
+              <option value="emt">EMT</option>
+              <option value="imc">IMC</option>
+              <option value="rmc">RMC</option>
+              <option value="pvc40">PVC Schedule 40</option>
+              <option value="pvc80">PVC Schedule 80</option>
+            </select>
+          </label>
+          <label>
+            Trade size
+            <select name="tradeSize">
+              <option>1/2</option>
+              <option>3/4</option>
+              <option>1</option>
+              <option>1-1/4</option>
+              <option>1-1/2</option>
+              <option>2</option>
+              <option>2-1/2</option>
+              <option>3</option>
+              <option>3-1/2</option>
+              <option>4</option>
+            </select>
+          </label>
+          <label>
+            THHN size
+            <select name="size">
+              <option>14</option>
+              <option selected>12</option>
+              <option>10</option>
+              <option>8</option>
+              <option>6</option>
+              <option>4</option>
+              <option>3</option>
+              <option>2</option>
+              <option>1</option>
+              <option>1/0</option>
+              <option>2/0</option>
+              <option>3/0</option>
+              <option>4/0</option>
+            </select>
+          </label>
+          <label>
+            Conductor count
+            <input
+              name="qty"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              step="1"
+              required
+              value="9"
+            />
+          </label>
+          <button class="full" type="submit">Check fill</button>
+        </div>
+      </form>
+      <div id="result" hidden></div>
+      <section class="formula">
+        <h2>How fill is calculated</h2>
+        <ol>
+          <li>Look up each THHN area in Chapter 9 Table 5 and add them up.</li>
+          <li>Look up the raceway internal area in Table 4.</li>
+          <li>
+            Allowed fill is 53% (1 wire), 31% (2 wires), or 40% (3 or more).
+          </li>
+        </ol>
+        <p>
+          Worked example: 9 × 12 AWG THHN = 0.1197 in². ½″ EMT is 0.304 in².
+          40% = 0.1216 in². Nine conductors pass; ten (0.1330 in²) fail.
+        </p>
+        <p>
+          Tables follow NEC Chapter 9. This page is not the code book and is
+          not a substitute for the edition your jurisdiction adopted.
+        </p>
+      </section>
+      <section class="disclaimer">
+        <h2>What this page is not</h2>
+        <p>
+          It does not model nipples (24 in or less), compact conductors, XHHW
+          areas, derating, or boxes. It is not engineering advice.
+        </p>
+      </section>
+      <footer>
+        racewayfill.com · English (United States). Tables last checked September
+        2026.
+      </footer>
+    </main>
+    <script type="module" src="./app-fill.js"></script>
+  </body>
+</html>

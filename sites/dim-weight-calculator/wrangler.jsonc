@@ -1,0 +1,14 @@
+{
+  "name": "dimpounds",
+  "compatibility_date": "2026-09-16",
+  "workers_dev": true,
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "404-page"
+  }
+  // After dimpounds.com is in this Cloudflare account:
+  // "routes": [
+  //   { "pattern": "dimpounds.com", "custom_domain": true },
+  //   { "pattern": "www.dimpounds.com", "custom_domain": true }
+  // ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "racewayfill",
+  "compatibility_date": "2026-09-16",
+  "workers_dev": true,
+  "assets": {
+    "directory": ".",
+    "not_found_handling": "404-page"
+  }
+  // After racewayfill.com is in this Cloudflare account:
+  // "routes": [
+  //   { "pattern": "racewayfill.com", "custom_domain": true },
+  //   { "pattern": "www.racewayfill.com", "custom_domain": true }
+  // ]
+}

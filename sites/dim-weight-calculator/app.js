@@ -40,8 +40,7 @@ function render(data) {
   result.hidden = false;
 }
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+function run() {
   try {
     const data = calculateUpsDimWeight({
       lengthIn: num("length"),
@@ -55,4 +54,11 @@ form.addEventListener("submit", (event) => {
     result.hidden = false;
     result.innerHTML = `<p>${error instanceof Error ? error.message : "Could not calculate."}</p>`;
   }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  run();
 });
+form.addEventListener("input", run);
+run();

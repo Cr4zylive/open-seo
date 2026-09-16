@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stair calculator (rise, run, and stringer length)</title>
+    <meta
+      name="description"
+      content="Plan a straight stair from total rise, target riser height, and tread depth. Shows riser count, run, and stringer length."
+    />
+    <link rel="canonical" href="https://stairrise.com/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://stairrise.com/" />
+    <meta property="og:title" content="Stair calculator (rise, run, and stringer length)" />
+    <meta
+      property="og:description"
+      content="Straight-run stair geometry from total rise, target riser, and tread depth."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Stair Rise",
+        "url": "https://stairrise.com/",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Stair calculator</h1>
+      <p class="lede">
+        Straight run only. Enter the floor-to-floor rise. The page picks a
+        whole number of risers near your target height.
+      </p>
+      <form id="calc">
+        <div class="grid">
+          <label>
+            Total rise (inches)
+            <input name="totalRiseIn" type="number" min="0" step="any" required value="105" />
+          </label>
+          <label>
+            Target riser (inches)
+            <input name="targetRiserIn" type="number" min="0" step="any" required value="7.5" />
+          </label>
+          <label class="full">
+            Tread depth (inches)
+            <input name="treadIn" type="number" min="0" step="any" required value="10" />
+          </label>
+          <button class="full" type="submit">Calculate stairs</button>
+        </div>
+      </form>
+      <div id="result" hidden></div>
+      <section class="formula">
+        <h2>How it is calculated</h2>
+        <ol>
+          <li>Risers = round(total rise ÷ target riser), at least 2.</li>
+          <li>Actual riser = total rise ÷ risers.</li>
+          <li>Treads on a straight run = risers − 1.</li>
+          <li>Total run = treads × tread depth. Stringer = √(rise² + run²).</li>
+        </ol>
+        <p>
+          Example: 105 in rise, 7.5 in target, 10 in treads →
+          <strong>14 risers</strong> of 7.5 in, 13 treads, 130 in run.
+        </p>
+        <p>
+          IRC R311.7 often caps residential risers at 7.75 in and treads at a
+          10 in minimum. Local code wins.
+        </p>
+      </section>
+      <section class="disclaimer">
+        <h2>What this page is not</h2>
+        <p>
+          It is not L-shaped stairs, landings, headroom, or a permit drawing.
+          Not building-code advice.
+        </p>
+      </section>
+      <footer>
+        stairrise.com · English (United States). Geometry last checked September
+        2026.
+      </footer>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

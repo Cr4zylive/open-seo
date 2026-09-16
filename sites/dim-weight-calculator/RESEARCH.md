@@ -1,6 +1,6 @@
 # Seed research — dimensional / volumetric weight
 
-Cluster: **priority 1, UPS dimensional weight**. One carrier, one tool. English (United States) first. Not a multi-carrier collection.
+Cluster: **priority 1, UPS dimensional weight**. One carrier, one tool. English (United States) first. Not a multi-carrier collection. Live brand: **dimpounds.com**. CBM lives on **freightcbm.com**, not this site.
 
 Data from OpenSEO MCP on 2026-09-15. Project `653043b6-02b7-4a1a-b79e-1c1f27695755`, market **2840 / en**. Tools: `get_keyword_metrics` (volume, KD, CPC, intent) and `get_serp_results` (Google organic live/advanced, depth 20). Metrics that DataForSEO Labs did not return are **unknown**, not estimated.
 

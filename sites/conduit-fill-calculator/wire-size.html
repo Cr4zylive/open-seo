@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wire size calculator (voltage-drop limited AWG)</title>
+    <meta
+      name="description"
+      content="Pick the smallest AWG from 14 through 4/0 that stays under a voltage-drop percent for copper or aluminum."
+    />
+    <link rel="canonical" href="https://racewayfill.com/wire-size.html" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://racewayfill.com/wire-size.html" />
+    <meta
+      property="og:title"
+      content="Wire size calculator (voltage-drop limited AWG)"
+    />
+    <meta
+      property="og:description"
+      content="Pick the smallest AWG from 14 through 4/0 that stays under a voltage-drop percent."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Raceway Fill — Wire size",
+        "url": "https://racewayfill.com/wire-size.html",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <nav>
+        <a href="./">Conduit fill</a>
+        <a href="./voltage-drop.html">Voltage drop</a>
+        <a href="./wire-size.html" aria-current="page">Wire size</a>
+      </nav>
+      <h1>Wire size calculator</h1>
+      <p class="lede">
+        Finds the smallest THHN-sized conductor (14 AWG–4/0) that keeps voltage
+        drop at or under your limit. Ampacity and derating are not applied.
+      </p>
+      <form id="calc">
+        <div class="grid">
+          <label>
+            Phase
+            <select name="phase">
+              <option value="1">Single-phase</option>
+              <option value="3">Three-phase</option>
+            </select>
+          </label>
+          <label>
+            Conductor
+            <select name="material">
+              <option value="copper">Copper</option>
+              <option value="aluminum">Aluminum</option>
+            </select>
+          </label>
+          <label>
+            Load (amps)
+            <input name="amps" type="number" min="0" step="any" required value="20" />
+          </label>
+          <label>
+            One-way length (ft)
+            <input name="feet" type="number" min="0" step="any" required value="100" />
+          </label>
+          <label>
+            System voltage
+            <input name="volts" type="number" min="0" step="any" required value="120" />
+          </label>
+          <label>
+            Max drop (%)
+            <input name="maxPercent" type="number" min="0" step="any" required value="3" />
+          </label>
+          <button class="full" type="submit">Recommend wire size</button>
+        </div>
+      </form>
+      <div id="result" hidden></div>
+      <section class="formula">
+        <h2>Worked example</h2>
+        <p>
+          120 V, 20 A, 100 ft, copper, 3% cap: #10 is about 4.1% (too high).
+          <strong>#8</strong> is about 2.6% and is the first size that passes.
+        </p>
+      </section>
+      <section class="disclaimer">
+        <h2>What this page is not</h2>
+        <p>
+          It does not apply NEC 310.16 ampacity, bundling, or temperature
+          correction. A #8 that passes drop can still be illegal for the
+          breaker. Not engineering advice.
+        </p>
+      </section>
+      <footer>racewayfill.com · Wire size here is drop-limited, not ampacity.</footer>
+    </main>
+    <script type="module" src="./app-wire.js"></script>
+  </body>
+</html>

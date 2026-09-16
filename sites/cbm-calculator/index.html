@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CBM calculator for shipping (cubic meters)</title>
+    <meta
+      name="description"
+      content="Convert carton length, width, height, and quantity into cubic meters (CBM) for ocean or air freight planning."
+    />
+    <link rel="canonical" href="https://freightcbm.com/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://freightcbm.com/" />
+    <meta property="og:title" content="CBM calculator for shipping (cubic meters)" />
+    <meta
+      property="og:description"
+      content="Carton size and quantity to cubic meters. Not UPS dimensional weight."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Freight CBM",
+        "url": "https://freightcbm.com/",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>CBM calculator for shipping</h1>
+      <p class="lede">
+        Cubic meters only. Not UPS dimensional weight in inches, and not a
+        freight quote.
+      </p>
+      <form id="calc">
+        <div class="grid">
+          <label>
+            Length
+            <input name="length" type="number" min="0" step="any" required value="100" />
+          </label>
+          <label>
+            Width
+            <input name="width" type="number" min="0" step="any" required value="50" />
+          </label>
+          <label>
+            Height
+            <input name="height" type="number" min="0" step="any" required value="40" />
+          </label>
+          <label>
+            Quantity
+            <input name="qty" type="number" min="0" step="1" required value="2" />
+          </label>
+          <label class="full">
+            Units
+            <select name="unit">
+              <option value="cm" selected>Centimeters</option>
+              <option value="m">Meters</option>
+              <option value="in">Inches</option>
+            </select>
+          </label>
+          <button class="full" type="submit">Calculate CBM</button>
+        </div>
+      </form>
+      <div id="result" hidden></div>
+      <section class="formula">
+        <h2>How CBM is calculated</h2>
+        <p>
+          Convert each side to meters, then
+          <code>length × width × height × quantity</code>.
+        </p>
+        <p>
+          Example: 100 × 50 × 40 cm × 2 cartons = 1.00 × 0.50 × 0.40 × 2 =
+          <strong>0.40 m³</strong>.
+        </p>
+      </section>
+      <section class="disclaimer">
+        <h2>What this page is not</h2>
+        <p>
+          It does not apply air chargeable weight (÷5000 / ÷6000) or UPS Daily
+          139 / Retail 166. Those are different formulas on different sites.
+        </p>
+      </section>
+      <footer>
+        freightcbm.com · English (United States). Formula last checked September
+        2026.
+      </footer>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
