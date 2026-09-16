@@ -8,6 +8,28 @@
       name="description"
       content="Calculate UPS billable weight from carton inches and actual pounds. Uses the published Daily (139) and Retail (166) dimensional-weight divisors."
     />
+    <link rel="canonical" href="https://dimpounds.com/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://dimpounds.com/" />
+    <meta
+      property="og:title"
+      content="UPS dimensional weight calculator (Daily 139 / Retail 166)"
+    />
+    <meta
+      property="og:description"
+      content="Carton inches and scale pounds to UPS billable weight. Daily divisor 139, Retail 166."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Dim Pounds",
+        "url": "https://dimpounds.com/",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -133,7 +155,8 @@
       </section>
 
       <footer>
-        English (United States) first. Formula last checked September 2026.
+        dimpounds.com · English (United States). Formula last checked September
+        2026.
       </footer>
     </main>
     <script type="module" src="./app.js"></script>

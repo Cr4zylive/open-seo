@@ -8,6 +8,25 @@
       name="description"
       content="Plan a straight stair from total rise, target riser height, and tread depth. Shows riser count, run, and stringer length."
     />
+    <link rel="canonical" href="https://stairrise.com/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://stairrise.com/" />
+    <meta property="og:title" content="Stair calculator (rise, run, and stringer length)" />
+    <meta
+      property="og:description"
+      content="Straight-run stair geometry from total rise, target riser, and tread depth."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Stair Rise",
+        "url": "https://stairrise.com/",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -59,7 +78,10 @@
           Not building-code advice.
         </p>
       </section>
-      <footer>English (United States). Geometry last checked September 2026.</footer>
+      <footer>
+        stairrise.com · English (United States). Geometry last checked September
+        2026.
+      </footer>
     </main>
     <script type="module" src="./app.js"></script>
   </body>

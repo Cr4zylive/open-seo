@@ -1,7 +1,14 @@
 {
-  "name": "stair-calculator",
+  "name": "stairrise",
   "compatibility_date": "2026-09-16",
+  "workers_dev": true,
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "not_found_handling": "404-page"
   }
+  // After stairrise.com is in this Cloudflare account:
+  // "routes": [
+  //   { "pattern": "stairrise.com", "custom_domain": true },
+  //   { "pattern": "www.stairrise.com", "custom_domain": true }
+  // ]
 }

@@ -3,8 +3,7 @@ import { calculateConduitFill } from "./fill.mjs";
 const form = document.querySelector("#calc");
 const result = document.querySelector("#result");
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+function run() {
   try {
     const qty = Number(form.elements.namedItem("qty").value);
     const data = calculateConduitFill({
@@ -32,4 +31,11 @@ form.addEventListener("submit", (event) => {
     result.hidden = false;
     result.innerHTML = `<p>${error instanceof Error ? error.message : "Could not calculate."}</p>`;
   }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  run();
 });
+form.addEventListener("input", run);
+run();

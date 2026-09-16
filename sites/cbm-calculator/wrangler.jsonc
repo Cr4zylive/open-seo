@@ -1,7 +1,14 @@
 {
-  "name": "cbm-calculator",
+  "name": "freightcbm",
   "compatibility_date": "2026-09-16",
+  "workers_dev": true,
   "assets": {
-    "directory": "."
+    "directory": ".",
+    "not_found_handling": "404-page"
   }
+  // After freightcbm.com is in this Cloudflare account:
+  // "routes": [
+  //   { "pattern": "freightcbm.com", "custom_domain": true },
+  //   { "pattern": "www.freightcbm.com", "custom_domain": true }
+  // ]
 }

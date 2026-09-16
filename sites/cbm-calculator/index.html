@@ -8,6 +8,25 @@
       name="description"
       content="Convert carton length, width, height, and quantity into cubic meters (CBM) for ocean or air freight planning."
     />
+    <link rel="canonical" href="https://freightcbm.com/" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://freightcbm.com/" />
+    <meta property="og:title" content="CBM calculator for shipping (cubic meters)" />
+    <meta
+      property="og:description"
+      content="Carton size and quantity to cubic meters. Not UPS dimensional weight."
+    />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Freight CBM",
+        "url": "https://freightcbm.com/",
+        "applicationCategory": "UtilitiesApplication",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -65,7 +84,10 @@
           139 / Retail 166. Those are different formulas on different sites.
         </p>
       </section>
-      <footer>English (United States). Formula last checked September 2026.</footer>
+      <footer>
+        freightcbm.com · English (United States). Formula last checked September
+        2026.
+      </footer>
     </main>
     <script type="module" src="./app.js"></script>
   </body>

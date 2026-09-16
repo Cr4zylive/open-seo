@@ -9,8 +9,7 @@ function num(name) {
   return value;
 }
 
-form.addEventListener("submit", (event) => {
-  event.preventDefault();
+function run() {
   try {
     const data = voltageDrop({
       phase: form.elements.namedItem("phase").value,
@@ -36,4 +35,11 @@ form.addEventListener("submit", (event) => {
     result.hidden = false;
     result.innerHTML = `<p>${error instanceof Error ? error.message : "Could not calculate."}</p>`;
   }
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  run();
 });
+form.addEventListener("input", run);
+run();
