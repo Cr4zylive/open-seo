@@ -5,16 +5,15 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
-import { Search } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
-  AppDataTable,
+  DataTable,
   makeSelectionColumn,
-  useAppTable,
+  useDataTable,
   useSelectionAnchor,
-} from "@/client/components/table/AppDataTable";
+} from "@/client/components/table/DataTable";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
-import { DifficultyBadge } from "@/client/features/domain/components/DifficultyBadge";
+import { ScoreBadge } from "@/client/components/table/ScoreBadge";
 import { IntentBadge } from "@/client/features/keywords/components";
 import type { KeywordIntent, SavedKeywordRow } from "@/types/keywords";
 import { TagChip } from "./TagChip";
@@ -31,16 +30,22 @@ export function SavedKeywordsTable({
   sorting,
   isLoading,
   hasActiveFilters,
+  onClearFilters,
   onRowSelectionChange,
   onSortingChange,
+  toolbar,
+  footer,
 }: {
   rows: SavedKeywordRow[];
   rowSelection: RowSelectionState;
   sorting: SortingState;
   isLoading: boolean;
   hasActiveFilters: boolean;
+  onClearFilters: () => void;
   onRowSelectionChange: OnChangeFn<RowSelectionState>;
   onSortingChange: OnChangeFn<SortingState>;
+  toolbar: ReactNode;
+  footer: ReactNode;
 }) {
   const selectAnchorRef = useSelectionAnchor();
   const columns = useMemo<ColumnDef<SavedKeywordRow>[]>(
@@ -88,10 +93,10 @@ export function SavedKeywordsTable({
             helpText="自然搜索排名难度（0 到 100），数值越高表示进入 Google 前 10 名越难。"
           />
         ),
-        cell: ({ getValue }) => <DifficultyBadge value={getValue()} />,
+        cell: ({ getValue }) => <ScoreBadge value={getValue()} />,
       }),
       columnHelper.accessor("intent", {
-        header: () => "搜索意图",
+        header: () => "意图",
         cell: ({ getValue }) => (
           <IntentBadge intent={normalizeIntent(getValue())} />
         ),
@@ -109,7 +114,7 @@ export function SavedKeywordsTable({
           <SortableHeader column={column} label="上次获取" />
         ),
         cell: ({ getValue }) => (
-          <span className="text-xs text-base-content/55">
+          <span className="text-xs text-muted-foreground">
             {formatSavedKeywordDate(getValue())}
           </span>
         ),
@@ -117,7 +122,7 @@ export function SavedKeywordsTable({
     ],
     [selectAnchorRef],
   );
-  const table = useAppTable({
+  const table = useDataTable({
     data: rows,
     columns,
     state: { rowSelection, sorting },
@@ -126,15 +131,24 @@ export function SavedKeywordsTable({
     getRowId: (row) => row.id,
     enableRowSelection: true,
     manualSorting: true,
+    // The server sorts by one column, so there is always exactly one sort:
+    // a click flips its direction and shift+click does not add a second.
+    enableSortingRemoval: false,
+    enableMultiSort: false,
   });
 
   return (
-    <AppDataTable
+    <DataTable
       table={table}
-      className="table table-sm"
       isLoading={isLoading}
-      loading={<SavedKeywordsSkeleton />}
-      empty={<SavedKeywordsEmptyState hasActiveFilters={hasActiveFilters} />}
+      isFiltered={hasActiveFilters}
+      onClearFilters={onClearFilters}
+      empty={{
+        title: "还没有已保存关键词",
+        description: "前往关键词研究页面查找并保存关键词。",
+      }}
+      toolbar={toolbar}
+      footer={footer}
     />
   );
 }
@@ -154,50 +168,13 @@ function normalizeIntent(value: string | null): KeywordIntent {
 
 function TagList({ tags }: { tags: SavedKeywordRow["tags"] }) {
   if (tags.length === 0) {
-    return <span className="text-base-content/35">-</span>;
+    return <span className="text-muted-foreground">-</span>;
   }
   return (
     <div className="flex flex-wrap gap-1">
       {tags.map((tag) => (
         <TagChip key={tag.id} tag={tag} size="xs" />
       ))}
-    </div>
-  );
-}
-
-function SavedKeywordsSkeleton() {
-  return (
-    <div className="space-y-3" aria-busy>
-      <div className="skeleton h-4 w-48" />
-      {Array.from({ length: 8 }).map((_, index) => (
-        <div key={index} className="grid grid-cols-9 items-center gap-3">
-          <div className="skeleton h-4" />
-          <div className="skeleton col-span-2 h-4" />
-          <div className="skeleton h-4" />
-          <div className="skeleton h-4" />
-          <div className="skeleton h-4" />
-          <div className="skeleton h-4" />
-          <div className="skeleton h-4" />
-          <div className="skeleton h-4" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SavedKeywordsEmptyState({
-  hasActiveFilters,
-}: {
-  hasActiveFilters: boolean;
-}) {
-  return (
-    <div className="py-12 text-center text-sm text-base-content/55">
-      <Search className="mx-auto mb-2 size-8 opacity-40" />
-      <p>
-        {hasActiveFilters
-          ? "没有已保存关键词符合当前筛选条件。"
-          : "暂无已保存关键词。可前往“关键词研究”页面查找并保存。"}
-      </p>
     </div>
   );
 }

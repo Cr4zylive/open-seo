@@ -1,21 +1,32 @@
-import { useForm } from "@tanstack/react-form";
+import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useAppForm } from "@/client/components/form/useAppForm";
+import { Button } from "@/client/components/ui/button";
 import {
   AuthPageCard,
   AuthMethodChooser,
+  TermsAgreementNotice,
+  authInputClassName,
+  authSubmitClassName,
   authRedirectSearchSchema,
   useAuthPageState,
 } from "@/client/features/auth/AuthPage";
-import { getFieldError, getFormError } from "@/client/lib/forms";
+import { signUpStatusQueryOptions } from "@/client/features/auth/signUpStatus";
+import { useGoogleAuth } from "@/client/features/auth/useGoogleAuth";
+import { getFormError } from "@/client/lib/forms";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { authClient } from "@/lib/auth-client";
-import { getSignInSearch, getVerifyEmailSearch } from "@/lib/auth-redirect";
+import {
+  getSignInSearch,
+  getVerifyEmailSearch,
+  toAuthCallbackURL,
+} from "@/lib/auth-redirect";
 import { z } from "zod";
 
 const signInSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address."),
-  password: z.string().min(1, "Enter your password."),
+  email: z.string().trim().email("请输入有效的邮箱地址。"),
+  password: z.string().min(1, "请输入密码。"),
 });
 
 export const Route = createFileRoute("/_auth/sign-in")({
@@ -26,15 +37,31 @@ export const Route = createFileRoute("/_auth/sign-in")({
 function SignInPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { redirectTo, oauthQuery, isHostedMode } = useAuthPageState(
-    search.redirect,
-  );
-  const authCallbackURL = redirectTo;
+  const { redirectTo, oauthQuery, isHostedMode, isBetterAuthMode } =
+    useAuthPageState(search.redirect);
   const [showEmailForm, setShowEmailForm] = useState(false);
-  const [isStartingGoogle, setIsStartingGoogle] = useState(false);
-  const [socialError, setSocialError] = useState<string | null>(null);
+  // The standalone Docker edition has accounts but no Google sign-in and no
+  // emailed password reset: go straight to the email form. Accounts come from
+  // invitations, and a fresh installation has nobody to sign in, so its first
+  // visitor is sent to create the admin account instead.
+  const emailOnly = isBetterAuthMode && !isHostedMode;
+  const emailFormVisible = showEmailForm || emailOnly;
+  const google = useGoogleAuth({ redirectTo });
+  const signUpStatus = useQuery({
+    ...signUpStatusQueryOptions(),
+    enabled: emailOnly,
+  });
+  const firstAccount = signUpStatus.data?.firstAccount === true;
+  useEffect(() => {
+    if (!firstAccount) return;
+    void navigate({
+      to: "/sign-up",
+      search: getSignInSearch(redirectTo),
+      replace: true,
+    });
+  }, [firstAccount, navigate, redirectTo]);
 
-  const form = useForm({
+  const form = useAppForm({
     defaultValues: {
       email: "",
       password: "",
@@ -52,7 +79,7 @@ function SignInPage() {
         const result = await authClient.signIn.email({
           email,
           password: value.password,
-          callbackURL: authCallbackURL,
+          callbackURL: toAuthCallbackURL(redirectTo),
           ...(oauthQuery ? { oauth_query: oauthQuery } : {}),
         });
 
@@ -79,14 +106,14 @@ function SignInPage() {
 
         formApi.setErrorMap({
           onSubmit: {
-            form: result.error.message || "We couldn't sign you in.",
+            form: result.error.message || "无法登录。",
             fields: {},
           },
         });
       } catch {
         formApi.setErrorMap({
           onSubmit: {
-            form: "Unable to sign in right now. Please try again.",
+            form: "暂时无法登录，请重试。",
             fields: {},
           },
         });
@@ -94,161 +121,120 @@ function SignInPage() {
     },
   });
 
-  async function handleContinueWithGoogle() {
-    setSocialError(null);
-    setIsStartingGoogle(true);
-
-    try {
-      captureClientEvent("auth:sign_in_google_start", {
-        redirect_to: redirectTo,
-      });
-      const result = await authClient.signIn.social({
-        provider: "google",
-        callbackURL: authCallbackURL,
-      });
-
-      if (result.error) {
-        setSocialError(
-          result.error.message || "Google sign in is not available right now.",
-        );
-        setIsStartingGoogle(false);
-      }
-    } catch {
-      setSocialError("Google sign in is not available right now.");
-      setIsStartingGoogle(false);
-    }
-  }
-
   return (
     <AuthPageCard
-      title="Sign in"
+      title="登录"
       footer={
-        isHostedMode ? (
+        emailOnly ? (
+          <p className="text-sm text-foreground/50">
+            需要账户？请向管理员索取邀请。忘记密码？请让服务器管理员重置。
+          </p>
+        ) : isHostedMode ? (
           <div
             className={
               showEmailForm
-                ? "flex justify-between text-sm text-base-content/50"
-                : "text-sm text-base-content/50"
+                ? "flex w-full justify-between text-sm text-foreground/50"
+                : "w-full text-sm text-foreground/50"
             }
           >
             {showEmailForm ? (
               <Link
                 to="/forgot-password"
                 search={getSignInSearch(redirectTo)}
-                className="text-base-content underline underline-offset-2 hover:text-base-content/80 transition-colors"
+                className="text-foreground underline underline-offset-2 hover:text-foreground/80 transition-colors"
               >
-                Forgot password?
+                忘记密码？
               </Link>
             ) : null}
             <Link
               to="/sign-up"
               search={getSignInSearch(redirectTo)}
-              className="text-base-content underline underline-offset-2 hover:text-base-content/80 transition-colors"
+              className="text-foreground underline underline-offset-2 hover:text-foreground/80 transition-colors"
             >
-              Create account
+              创建账户
             </Link>
           </div>
         ) : null
       }
     >
-      {!showEmailForm ? (
+      {!emailFormVisible ? (
         <>
           <AuthMethodChooser
-            googleLabel="Continue with Google"
+            googleLabel="使用 Google 继续"
             disabled={!isHostedMode}
-            isBusy={isStartingGoogle}
+            isBusy={google.isStarting}
             onContinueWithGoogle={() => {
-              void handleContinueWithGoogle();
+              void google.start();
             }}
             onContinueWithEmail={() => {
               setShowEmailForm(true);
-              setSocialError(null);
+              google.clearError();
             }}
           />
-          {socialError ? (
-            <p className="text-sm text-error">{socialError}</p>
+          {isHostedMode ? (
+            <TermsAgreementNotice action="使用 Google 继续" />
+          ) : null}
+          {google.error ? (
+            <p className="text-sm text-destructive">{google.error}</p>
           ) : null}
         </>
       ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void form.handleSubmit();
-          }}
-        >
-          <form.Field name="email">
-            {(field) => {
-              const error = getFieldError(field.state.meta.errors);
+        <form.AppForm>
+          <form.Form className="space-y-4">
+            <form.AppField name="email">
+              {(field) => (
+                <field.TextField
+                  label="邮箱地址"
+                  hideLabel
+                  className={authInputClassName}
+                  type="email"
+                  placeholder="邮箱地址…"
+                  autoComplete="email"
+                  required
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="password">
+              {(field) => (
+                <field.TextField
+                  label="密码"
+                  hideLabel
+                  className={authInputClassName}
+                  type="password"
+                  placeholder="密码…"
+                  autoComplete="current-password"
+                  required
+                />
+              )}
+            </form.AppField>
 
-              return (
-                <div>
-                  <input
-                    type="email"
-                    className="input input-bordered w-full"
-                    placeholder="Email address..."
-                    value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    autoComplete="email"
-                    disabled={!isHostedMode}
-                    required
-                  />
-                  {error ? (
-                    <p className="mt-1 text-sm text-error">{error}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-
-          <form.Field name="password">
-            {(field) => {
-              const error = getFieldError(field.state.meta.errors);
-
-              return (
-                <div>
-                  <input
-                    type="password"
-                    className="input input-bordered w-full"
-                    placeholder="Password..."
-                    value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    autoComplete="current-password"
-                    disabled={!isHostedMode}
-                    required
-                  />
-                  {error ? (
-                    <p className="mt-1 text-sm text-error">{error}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-
-          <form.Subscribe
-            selector={(state) => ({
-              submitError: state.errorMap.onSubmit,
-              isSubmitting: state.isSubmitting,
-            })}
-          >
-            {({ submitError, isSubmitting }) => {
-              const errorMessage = getFormError(submitError);
-              return (
-                <>
-                  {errorMessage ? (
-                    <p className="text-sm text-error">{errorMessage}</p>
-                  ) : null}
-                  <button
-                    className="btn btn-soft w-full"
-                    disabled={!isHostedMode || isSubmitting}
-                  >
-                    {isSubmitting ? "Signing in..." : "Sign in"}
-                  </button>
-                </>
-              );
-            }}
-          </form.Subscribe>
-        </form>
+            <form.Subscribe
+              selector={(state) => ({
+                submitError: state.errorMap.onSubmit,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ submitError, isSubmitting }) => {
+                const errorMessage = getFormError(submitError);
+                return (
+                  <>
+                    {errorMessage ? (
+                      <p className="text-sm text-destructive">{errorMessage}</p>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      className={authSubmitClassName}
+                      pending={isSubmitting}
+                    >
+                      {isSubmitting ? "正在登录…" : "登录"}
+                    </Button>
+                  </>
+                );
+              }}
+            </form.Subscribe>
+          </form.Form>
+        </form.AppForm>
       )}
     </AuthPageCard>
   );

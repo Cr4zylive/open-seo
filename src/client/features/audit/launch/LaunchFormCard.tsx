@@ -1,27 +1,59 @@
 import { Link } from "@tanstack/react-router";
-import { Loader2 } from "lucide-react";
-import { MIN_PAGES } from "@/client/features/audit/launch/types";
+import { AlertCircle } from "lucide-react";
+import { Alert, AlertTitle } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/client/components/ui/card";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/client/components/ui/field";
+import { Input } from "@/client/components/ui/input";
+import { InsufficientCreditsError } from "@/client/features/billing/InsufficientCreditsError";
+import { Switch } from "@/client/components/ui/switch";
+import {
+  clampMaxPagesInput,
+  MIN_PAGES,
+} from "@/client/features/audit/launch/types";
 import type { useLaunchController } from "@/client/features/audit/launch/useLaunchController";
 import { getFieldError, getFormError } from "@/client/lib/forms";
+import {
+  isEveryAppClientAuthMode,
+  isHostedClientAuthMode,
+} from "@/lib/auth-mode";
 import { PAID_MAX_AUDIT_PAGES } from "@/shared/audit-limits";
+import { renderingEstimateText } from "@/shared/audit-rendering";
 import { SUBSCRIBE_ROUTE } from "@/shared/billing";
 
 type Props = {
   launchForm: ReturnType<typeof useLaunchController>["launchForm"];
   commitMaxPagesInput: () => number;
   maxPagesLimit: number;
+  canRenderJavaScript?: boolean;
+  outOfCredits?: boolean;
 };
 
 export function LaunchFormCard({
   commitMaxPagesInput,
   launchForm,
   maxPagesLimit,
+  canRenderJavaScript,
+  outOfCredits,
 }: Props) {
   return (
-    <div className="card bg-base-100 border border-base-300">
-      <div className="card-body gap-4">
-        <h2 className="card-title text-base">开始新审计</h2>
-
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <h2>开始新审计</h2>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
         <form
           className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:items-center"
           onSubmit={(event) => {
@@ -34,39 +66,33 @@ export function LaunchFormCard({
               const urlError = getFieldError(field.state.meta.errors);
 
               return (
-                <label
-                  className={`input input-bordered w-full lg:col-span-9 ${urlError ? "input-error" : ""}`}
-                >
-                  <input
-                    placeholder="https://example.com"
-                    value={field.state.value}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value);
-                      if (launchForm.state.errorMap.onSubmit) {
-                        launchForm.setErrorMap({ onSubmit: undefined });
-                      }
-                    }}
-                  />
-                </label>
+                <Input
+                  className="lg:col-span-9"
+                  aria-label="站点网址"
+                  aria-invalid={urlError ? true : undefined}
+                  placeholder="https://example.com"
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(event) => {
+                    field.handleChange(event.target.value);
+                    if (launchForm.state.errorMap.onSubmit) {
+                      launchForm.setErrorMap({ onSubmit: undefined });
+                    }
+                  }}
+                />
               );
             }}
           </launchForm.Field>
 
           <launchForm.Subscribe selector={(state) => state.isSubmitting}>
             {(isSubmitting) => (
-              <button
+              <Button
                 type="submit"
-                className="btn btn-primary btn-sm w-full lg:col-span-3"
-                disabled={isSubmitting}
+                className="w-full lg:col-span-3"
+                pending={isSubmitting}
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" /> 启动中…
-                  </>
-                ) : (
-                  "开始审计"
-                )}
-              </button>
+                {isSubmitting ? "正在启动…" : "开始审计"}
+              </Button>
             )}
           </launchForm.Subscribe>
 
@@ -76,13 +102,20 @@ export function LaunchFormCard({
               commitMaxPagesInput={commitMaxPagesInput}
               maxPagesLimit={maxPagesLimit}
             />
-            <LighthouseOptions launchForm={launchForm} />
+            <div className="space-y-4">
+              <LighthouseOptions launchForm={launchForm} />
+              <RenderingOptions
+                launchForm={launchForm}
+                maxPagesLimit={maxPagesLimit}
+                canRenderJavaScript={canRenderJavaScript}
+              />
+            </div>
           </div>
         </form>
 
-        <LaunchErrors launchForm={launchForm} />
-      </div>
-    </div>
+        <LaunchErrors launchForm={launchForm} outOfCredits={outOfCredits} />
+      </CardContent>
+    </Card>
   );
 }
 
@@ -91,105 +124,160 @@ function LaunchOptions({
   commitMaxPagesInput,
   maxPagesLimit,
 }: Props) {
-  const isFreeLimited = maxPagesLimit < PAID_MAX_AUDIT_PAGES;
-
   return (
-    <div className="rounded-lg border border-base-300 bg-base-200/20 p-3 space-y-2">
-      <label className="text-xs font-medium uppercase tracking-wide text-base-content/60">
-        抓取上限
-      </label>
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-base-content/70">最大页面数</span>
-        <launchForm.Field name="maxPagesInput">
-          {(field) => (
-            <input
-              type="number"
-              min={MIN_PAGES}
-              max={maxPagesLimit}
-              className="input input-bordered input-sm w-28"
-              value={field.state.value}
-              onChange={(event) => {
-                const next = event.target.value;
-                if (!/^\d*$/.test(next)) return;
-                field.handleChange(next);
-                if (launchForm.state.errorMap.onSubmit) {
-                  launchForm.setErrorMap({ onSubmit: undefined });
-                }
-              }}
-              onBlur={commitMaxPagesInput}
-            />
-          )}
-        </launchForm.Field>
-      </div>
-      <p className="text-xs text-base-content/50">
-        请输入 {MIN_PAGES} 到 {maxPagesLimit.toLocaleString()} 之间的任意数值。
-        {isFreeLimited ? (
+    <Field className="rounded-lg border border-border p-3">
+      <FieldLabel htmlFor="audit-max-pages">最大页面数</FieldLabel>
+      <launchForm.Field name="maxPagesInput">
+        {(field) => (
+          <Input
+            id="audit-max-pages"
+            type="number"
+            min={MIN_PAGES}
+            max={maxPagesLimit}
+            className="w-28"
+            value={field.state.value}
+            onChange={(event) => {
+              const next = event.target.value;
+              if (!/^\d*$/.test(next)) return;
+              field.handleChange(next);
+              if (launchForm.state.errorMap.onSubmit) {
+                launchForm.setErrorMap({ onSubmit: undefined });
+              }
+            }}
+            onBlur={commitMaxPagesInput}
+          />
+        )}
+      </launchForm.Field>
+      <FieldDescription>
+        可输入 {MIN_PAGES} 到 {maxPagesLimit.toLocaleString()} 之间的任意值。
+        {maxPagesLimit < PAID_MAX_AUDIT_PAGES ? (
           <>
             {" "}
-            <Link
-              to={SUBSCRIBE_ROUTE}
-              search={{ upgrade: true }}
-              className="link link-primary"
-            >
+            <Link to={SUBSCRIBE_ROUTE} search={{ upgrade: true }}>
               升级
             </Link>{" "}
-            后最高可抓取 {PAID_MAX_AUDIT_PAGES.toLocaleString()} 个页面。
+            后最多可抓取 {PAID_MAX_AUDIT_PAGES.toLocaleString()} 个页面。
           </>
         ) : null}
-      </p>
-    </div>
+      </FieldDescription>
+    </Field>
   );
 }
 
 function LighthouseOptions({ launchForm }: Pick<Props, "launchForm">) {
   return (
-    <div className="rounded-lg border border-base-300 bg-base-200/20 p-3 space-y-2">
-      <label className="label cursor-pointer justify-start gap-2 p-0">
+    <Field className="rounded-lg border border-border p-3">
+      <div className="flex items-center gap-2">
         <launchForm.Field name="runLighthouse">
           {(field) => (
-            <input
-              type="checkbox"
-              className="toggle toggle-sm toggle-primary"
+            <Switch
+              id="audit-run-lighthouse"
               checked={Boolean(field.state.value)}
-              onChange={(event) => field.handleChange(event.target.checked)}
+              onCheckedChange={(checked) => field.handleChange(checked)}
             />
           )}
         </launchForm.Field>
-        <span
-          className="text-sm font-medium text-base-content/80"
+        <FieldLabel
+          htmlFor="audit-run-lighthouse"
           title="Lighthouse 用于衡量页面性能并发现问题。"
         >
-          包含 Lighthouse 检查
-        </span>
-      </label>
+          包含 Lighthouse
+        </FieldLabel>
+      </div>
 
       <launchForm.Subscribe
         selector={(snapshot) => snapshot.values.runLighthouse}
       >
         {(runLighthouse) =>
           runLighthouse ? (
-            <div className="space-y-1">
-              <p className="text-xs text-base-content/60">
-                系统会选取 20 个页面样本进行审计，并排除重复模板页面。
-              </p>
-            </div>
+            <FieldDescription>
+              我们会抽样 20 个页面进行审计，并排除重复模板页面。
+            </FieldDescription>
           ) : null
         }
       </launchForm.Subscribe>
-    </div>
+    </Field>
   );
 }
 
-function LaunchErrors({ launchForm }: Pick<Props, "launchForm">) {
+function RenderingOptions({
+  launchForm,
+  maxPagesLimit,
+  canRenderJavaScript,
+}: Pick<Props, "launchForm" | "maxPagesLimit" | "canRenderJavaScript">) {
+  return (
+    <Field className="rounded-lg border border-border p-3">
+      <div className="flex items-center gap-2">
+        <launchForm.Field name="renderJavaScript">
+          {(field) => (
+            <Switch
+              id="audit-render-javascript"
+              checked={field.state.value}
+              disabled={canRenderJavaScript !== true}
+              onCheckedChange={(checked) => field.handleChange(checked)}
+            />
+          )}
+        </launchForm.Field>
+        <FieldLabel
+          htmlFor="audit-render-javascript"
+          title="审计前先在浏览器中加载每个页面。速度较慢。"
+        >
+          渲染 JavaScript
+        </FieldLabel>
+      </div>
+
+      {isHostedClientAuthMode() && (
+        <launchForm.Subscribe
+          selector={(state) => ({
+            renderJavaScript: state.values.renderJavaScript,
+            maxPagesInput: state.values.maxPagesInput,
+          })}
+        >
+          {({ renderJavaScript, maxPagesInput }) =>
+            renderJavaScript ? (
+              <FieldDescription>
+                {renderingEstimateText(
+                  clampMaxPagesInput(maxPagesInput, maxPagesLimit),
+                )}
+              </FieldDescription>
+            ) : null
+          }
+        </launchForm.Subscribe>
+      )}
+      {canRenderJavaScript === false && isEveryAppClientAuthMode() && (
+        <FieldDescription>
+          Every App 网关尚未配置 JavaScript 渲染。所有者或管理员可用{" "}
+          <code>pnpm everyapp secret set CONTEXT_API_KEY</code> 进行设置。
+        </FieldDescription>
+      )}
+      {canRenderJavaScript === false && !isEveryAppClientAuthMode() && (
+        <FieldDescription>
+          此部署没有浏览器，渲染需要 Context.dev API 密钥。请设置{" "}
+          <code>CONTEXT_API_KEY</code>，重启 OpenSEO，然后刷新此页面。{" "}
+          <a
+            href="https://github.com/every-app/open-seo/blob/main/docs/SELF_HOSTING_CLOUDFLARE_OPERATIONS.md#render-javascript-in-site-audits"
+            target="_blank"
+            rel="noreferrer"
+          >
+            设置指南
+          </a>
+        </FieldDescription>
+      )}
+    </Field>
+  );
+}
+
+function LaunchErrors({
+  launchForm,
+  outOfCredits,
+}: Pick<Props, "launchForm" | "outOfCredits">) {
   return (
     <div className="space-y-2">
       <launchForm.Field name="url">
         {(field) => {
           const urlError = getFieldError(field.state.meta.errors);
 
-          return urlError ? (
-            <p className="text-sm text-error">{urlError}</p>
-          ) : null;
+          return urlError ? <FieldError>{urlError}</FieldError> : null;
         }}
       </launchForm.Field>
 
@@ -197,10 +285,13 @@ function LaunchErrors({ launchForm }: Pick<Props, "launchForm">) {
         {(submitError) => {
           const errorMessage = getFormError(submitError);
 
+          if (errorMessage && outOfCredits)
+            return <InsufficientCreditsError title={errorMessage} />;
           return errorMessage ? (
-            <div className="alert alert-error py-2">
-              <span className="text-sm">{errorMessage}</span>
-            </div>
+            <Alert variant="destructive">
+              <AlertCircle />
+              <AlertTitle>{errorMessage}</AlertTitle>
+            </Alert>
           ) : null;
         }}
       </launchForm.Subscribe>

@@ -1,14 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   createColumnHelper,
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
 import { ExternalLink } from "lucide-react";
-import {
-  AppDataTable,
-  useAppTable,
-} from "@/client/components/table/AppDataTable";
+import { Badge } from "@/client/components/ui/badge";
+import { DataTable, useDataTable } from "@/client/components/table/DataTable";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
 import {
   extractHostname,
@@ -18,9 +16,8 @@ import {
 import type { AuditResultsData } from "@/client/features/audit/results/types";
 import {
   countActiveFilters,
-  EmptyTableMessage,
   PagesFilterBar,
-  TableFilterToggle,
+  ResultsTableToolbar,
 } from "@/client/features/audit/results/AuditResultsTableFilters";
 import {
   EMPTY_PAGES_FILTERS,
@@ -81,7 +78,9 @@ function hasAnalyzedContent(row: PageRow): boolean {
   return row.fetchClass === "ok" && !isRedirect(row);
 }
 
-const EmptyCell = () => <span className="text-xs text-base-content/40">-</span>;
+const EmptyCell = () => (
+  <span className="text-xs text-muted-foreground">-</span>
+);
 
 function buildPagesColumns({
   canonicalHost,
@@ -92,7 +91,7 @@ function buildPagesColumns({
 }): ColumnDef<PageRow>[] {
   return [
     pageColumnHelper.accessor("url", {
-      header: ({ column }) => <SortableHeader column={column} label="网址" />,
+      header: ({ column }) => <SortableHeader column={column} label="URL" />,
       cell: ({ getValue }) => {
         const url = getValue();
         return (
@@ -100,7 +99,7 @@ function buildPagesColumns({
             href={url}
             target="_blank"
             rel="noopener noreferrer"
-            className="link link-primary inline-flex items-center gap-1 text-xs"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
             <span className="truncate">{displayPath(url, canonicalHost)}</span>
             <ExternalLink className="size-3 shrink-0" />
@@ -111,7 +110,19 @@ function buildPagesColumns({
     }),
     pageColumnHelper.accessor("statusCode", {
       header: ({ column }) => <SortableHeader column={column} label="状态" />,
-      cell: ({ getValue }) => <HttpStatusBadge code={getValue()} />,
+      // A failed fetch or render has no HTTP status to show.
+      cell: ({ getValue, row }) =>
+        row.original.fetchClass === "error" ? (
+          <Badge
+            variant="destructive"
+            size="sm"
+            title="抓取或渲染失败，因此未检查此页面的内容问题。"
+          >
+            失败
+          </Badge>
+        ) : (
+          <HttpStatusBadge code={getValue()} />
+        ),
       sortingFn: nullableNumberSort,
     }),
     pageColumnHelper.accessor("title", {
@@ -120,8 +131,8 @@ function buildPagesColumns({
         if (isRedirect(row.original)) {
           const target = row.original.redirectUrl;
           return (
-            <span className="text-xs text-base-content/60">
-              → {target ? displayPath(target, canonicalHost) : "重定向"}
+            <span className="text-xs text-muted-foreground">
+              → {target ? displayPath(target, canonicalHost) : "redirect"}
             </span>
           );
         }
@@ -132,7 +143,7 @@ function buildPagesColumns({
         // Red only when the engine flagged it — a 200 that isn't an HTML
         // document (robots.txt, security.txt) legitimately has no title.
         return missingTitlePageIds.has(row.original.id) ? (
-          <span className="text-error text-xs">缺失</span>
+          <span className="text-destructive text-xs">missing</span>
         ) : (
           <EmptyCell />
         );
@@ -152,7 +163,7 @@ function buildPagesColumns({
     }),
     pageColumnHelper.display({
       id: "images",
-      header: ({ column }) => <SortableHeader column={column} label="图片" />,
+      header: ({ column }) => <SortableHeader column={column} label="Img" />,
       cell: ({ row }) => {
         if (!hasAnalyzedContent(row.original)) return <EmptyCell />;
         return row.original.imagesMissingAlt > 0 ? (
@@ -187,10 +198,12 @@ export function PagesTable({
   pages,
   startUrl,
   issues,
+  tabs,
 }: {
   pages: AuditResultsData["pages"];
   startUrl: string;
   issues: AuditResultsData["issues"];
+  tabs: ReactNode;
 }) {
   const [filters, setFilters] = useState<PagesFilters>(EMPTY_PAGES_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
@@ -217,7 +230,7 @@ export function PagesTable({
       }),
     [issues, pages, startUrl],
   );
-  const table = useAppTable({
+  const table = useDataTable({
     data: filteredPages,
     columns,
     state: { sorting },
@@ -225,28 +238,34 @@ export function PagesTable({
     withSorting: true,
   });
 
+  const resetFilters = () => setFilters(EMPTY_PAGES_FILTERS);
+
   return (
-    <div className="space-y-3">
-      <TableFilterToggle
-        showFilters={showFilters}
-        onToggle={() => setShowFilters((current) => !current)}
-        activeFilterCount={activeFilterCount}
-        resultCount={filteredPages.length}
-        totalCount={pages.length}
-      />
-      {showFilters ? (
-        <PagesFilterBar
-          filters={filters}
-          onChange={setFilters}
-          activeFilterCount={activeFilterCount}
-          onReset={() => setFilters(EMPTY_PAGES_FILTERS)}
-        />
-      ) : null}
-      <AppDataTable
-        table={table}
-        className="table table-sm"
-        empty={<EmptyTableMessage label="没有页面符合当前筛选条件。" />}
-      />
-    </div>
+    <DataTable
+      table={table}
+      empty={{ title: "尚未抓取页面" }}
+      isFiltered={activeFilterCount > 0}
+      onClearFilters={resetFilters}
+      toolbar={
+        <>
+          {tabs}
+          <ResultsTableToolbar
+            showFilters={showFilters}
+            onToggle={() => setShowFilters((current) => !current)}
+            activeFilterCount={activeFilterCount}
+            resultCount={filteredPages.length}
+            totalCount={pages.length}
+          />
+          {showFilters ? (
+            <PagesFilterBar
+              filters={filters}
+              onChange={setFilters}
+              activeFilterCount={activeFilterCount}
+              onReset={resetFilters}
+            />
+          ) : null}
+        </>
+      }
+    />
   );
 }

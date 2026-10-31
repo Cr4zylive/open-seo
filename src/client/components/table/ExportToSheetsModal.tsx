@@ -1,7 +1,15 @@
 import { useEffect } from "react";
 import { useLocation } from "@tanstack/react-router";
-import { Check, ExternalLink, X } from "lucide-react";
-import { Modal } from "@/client/components/Modal";
+import { Check, ExternalLink } from "lucide-react";
+import { Button } from "@/client/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/client/components/ui/dialog";
 import {
   closeExportToSheetsModal,
   openGoogleSheetsTab,
@@ -28,44 +36,31 @@ export function ExportToSheetsModal() {
   };
 
   return (
-    <Modal
-      maxWidth="max-w-md"
-      onClose={closeExportToSheetsModal}
-      labelledBy="export-to-sheets-title"
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) closeExportToSheetsModal();
+      }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex size-8 items-center justify-center rounded-full bg-success/15 text-success">
-            <Check className="size-4" />
-          </span>
-          <h3 id="export-to-sheets-title" className="text-base font-semibold">
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 pr-8 leading-snug">
+            <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+              <Check className="size-4" />
+            </span>
             已复制 {rowCount} 行到剪贴板
-          </h3>
-        </div>
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs btn-square"
-          onClick={closeExportToSheetsModal}
-          aria-label="关闭"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
-
-      <p className="text-sm text-base-content/75">
-        打开新的 Google 表格，然后粘贴即可填充数据。
-      </p>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="btn btn-primary btn-sm gap-1.5"
-          onClick={handleOpenSheet}
-        >
-          打开新的 Google 表格
-          <ExternalLink className="size-3.5" />
-        </button>
-      </div>
-    </Modal>
+          </DialogTitle>
+          <DialogDescription>
+            打开新的 Google 表格并粘贴即可填入。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button onClick={handleOpenSheet}>
+            打开新的 Google 表格
+            <ExternalLink data-icon="inline-end" />
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

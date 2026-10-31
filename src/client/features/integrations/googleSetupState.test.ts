@@ -2,8 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
-import { SearchConsoleConnectionCard } from "@/client/features/gsc/SearchConsoleConnectionCard";
-import { GoogleAnalyticsConnectionCard } from "@/client/features/ga4/GoogleAnalyticsConnectionCard";
+import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
+import type { GooglePickerAccount } from "./GooglePropertyPicker";
 import { SearchConsoleOnboardingStep } from "@/client/features/onboarding/SearchConsoleOnboardingStep";
 
 vi.mock("@/serverFunctions/gsc", () => ({
@@ -32,7 +32,6 @@ vi.mock("@/client/features/integrations/googleLinkError", () => ({
   clearGoogleLinkError: vi.fn(),
   reportGoogleLinkErrorOnce: vi.fn(),
 }));
-vi.mock("@/lib/auth-mode", () => ({ isHostedClientAuthMode: () => true }));
 vi.mock("@/client/lib/posthog", () => ({ captureClientEvent: vi.fn() }));
 
 function renderSetup(
@@ -40,9 +39,16 @@ function renderSetup(
   hasGrant: boolean,
   connected = false,
   canManage = true,
+  {
+    connectionError,
+    accounts,
+  }: {
+    connectionError?: "initial" | "refetch";
+    accounts?: GooglePickerAccount[];
+  } = {},
 ) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: { queries: { retry: false, retryOnMount: false } },
   });
   client.setQueryData(["projects"], [{ id: "project-a" }]);
   const provider = surface === "ga4" ? "ga4" : "gsc";
@@ -51,19 +57,37 @@ function renderSetup(
     currentUserHasGrant: hasGrant,
     canManage,
     googleOAuthConfigured: true,
-    siteUrl: "https://example.com/",
-    propertyId: "properties/123",
-    propertyDisplayName: "Example",
+    property: "https://example.com/",
   });
+  if (accounts) {
+    client.setQueryData(
+      [provider === "gsc" ? "gscSites" : "ga4Properties", "project-a"],
+      { accounts },
+    );
+  }
+  if (connectionError) {
+    client
+      .getQueryCache()
+      .find({
+        queryKey: [`${provider}Connection`, "project-a"],
+      })
+      ?.setState({
+        status: "error",
+        error: new Error("Connection check failed"),
+        ...(connectionError === "initial" ? { data: undefined } : {}),
+      });
+  }
   const component =
     surface === "onboarding"
-      ? createElement(SearchConsoleOnboardingStep)
-      : createElement(
-          surface === "gsc"
-            ? SearchConsoleConnectionCard
-            : GoogleAnalyticsConnectionCard,
-          { projectId: "project-a" },
-        );
+      ? createElement(SearchConsoleOnboardingStep, {
+          onNext: vi.fn(),
+          onBack: vi.fn(),
+          onSkip: vi.fn(),
+        })
+      : createElement(GoogleConnectionCard, {
+          provider,
+          projectId: "project-a",
+        });
   const html = renderToStaticMarkup(
     createElement(QueryClientProvider, { client }, component),
   );
@@ -77,22 +101,8 @@ describe.each(["gsc", "ga4", "onboarding"] as const)(
     it("opens property selection without a browser resume flag after authorization", () => {
       const html = renderSetup(surface, true);
       expect(html).toContain("选择媒体资源");
-      expect(html).toContain("选择媒体资源…");
-      expect(html).not.toContain("连接 Google");
-    });
-    it("offers authorization when no account has been linked", () => {
-      const html = renderSetup(surface, false);
-      expect(html).not.toContain("选择媒体资源…");
-      expect(html).toContain(
-        surface === "onboarding" ? "连接 Google" : "连接",
-      );
-    });
-    it("shows the saved connection rather than reopening setup", () => {
-      const html = renderSetup(surface, true, true);
-      expect(html).not.toContain("选择媒体资源…");
-      expect(html).toContain(
-        surface === "ga4" ? "Example" : "https://example.com/",
-      );
+      expect(html).toContain("添加 Google 账号");
+      expect(html).not.toContain("Connect with Google");
     });
   },
 );
@@ -101,7 +111,84 @@ it.each(["gsc", "ga4"] as const)(
   "does not automatically open property editing for a %s viewer",
   (surface) => {
     const html = renderSetup(surface, true, false, false);
-    expect(html).not.toContain("选择媒体资源…");
+    expect(html).not.toContain("选择媒体资源");
+    expect(html).not.toContain("保存媒体资源");
     expect(html).toContain("管理 Google 账号");
   },
 );
+
+describe("onboarding connection actions", () => {
+  it("keeps cached property setup and a single footer after a failed refetch", () => {
+    const html = renderSetup("onboarding", true, false, true, {
+      connectionError: "refetch",
+    });
+    expect(html).toContain("选择媒体资源");
+    expect(html).not.toContain("无法检查 Google 连接。");
+    expect(html.match(/保存并继续/g)).toHaveLength(1);
+    expect(html.match(/暂时跳过/g)).toHaveLength(1);
+    expect(html.match(/ 返回<\/button>/g)).toHaveLength(1);
+  });
+
+  it("keeps a saved connection usable after a failed refetch", () => {
+    const html = renderSetup("onboarding", true, true, true, {
+      connectionError: "refetch",
+    });
+    expect(html).toContain("https://example.com/");
+    expect(html).toMatch(/>继续[ <]/);
+    expect(html).not.toContain("保存并继续");
+  });
+
+  it("offers retry and disables saving when the initial connection check fails", () => {
+    const html = renderSetup("onboarding", false, false, true, {
+      connectionError: "initial",
+    });
+    expect(html).toContain("无法检查 Google 连接。");
+    expect(html).toContain("重试");
+    expect(html).not.toContain("选择媒体资源");
+    expect(html).toMatch(/disabled=""[^>]*>保存并继续/);
+  });
+});
+
+describe("Search Console website setup guidance", () => {
+  const emptyAccount = {
+    accountId: "account-a",
+    email: "owner@example.com",
+    requiresReconnect: false,
+    properties: [],
+  };
+
+  it.each(["gsc", "onboarding"] as const)(
+    "explains empty accounts without opening the %s picker",
+    (surface) => {
+      const html = renderSetup(surface, true, false, true, {
+        accounts: [emptyAccount],
+      });
+      expect(html).toContain("没有找到你的网站");
+      expect(html).toContain("owner@example.com");
+      expect(html).not.toContain("选择媒体资源");
+      expect(html).toContain("/blogs/google-search-console-setup");
+      expect(html).toContain("刷新");
+      expect(html).toContain("换一个 Google 账号");
+      if (surface === "onboarding") expect(html).toContain("暂时跳过");
+    },
+  );
+
+  it.each([
+    { requiresReconnect: true },
+    { unavailable: true },
+    {
+      properties: [
+        { id: "https://example.com/", name: "example.com", selectable: true },
+      ],
+    },
+  ])(
+    "does not mistake expired, failed, or populated accounts for a new website",
+    (patch) => {
+      const html = renderSetup("gsc", true, false, true, {
+        accounts: [{ ...emptyAccount, ...patch }],
+      });
+      expect(html).toContain("选择媒体资源");
+      expect(html).not.toContain("没有找到你的网站");
+    },
+  );
+});

@@ -1,34 +1,31 @@
 import * as React from "react";
+import { InlineConfirm } from "@/client/components/InlineConfirm";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import { QueryState } from "@/client/components/QueryState";
 import { getProjectContext } from "@/serverFunctions/projectContext";
 import {
   PROJECT_CONTEXT_SECTION_KEYS,
+  PROJECT_CONTEXT_SECTION_LABELS,
   PROSE_MAX_CHARS,
   type ProjectContextSectionKey,
 } from "@/types/schemas/projectContext";
 import { CompetitorsSection } from "./CompetitorsSection";
 import { KeyPagesSection } from "./KeyPagesSection";
 import {
-  ConfirmDeleteButton,
-  EmptyState,
-  FormActions,
   listClass,
   Provenance,
   RowActions,
-  SectionHeader,
   projectContextQueryKey,
   useContextUpdate,
   type ProjectContextData,
 } from "./shared";
-
-const SECTION_LABELS: Record<ProjectContextSectionKey, string> = {
-  business_overview: "业务概览",
-  current_goal: "当前目标",
-  positioning: "定位",
-  writing_preferences: "写作偏好",
-};
+import { EmptyState } from "@/client/components/EmptyState";
+import { FormActions } from "@/client/components/FormActions";
+import { SectionHeader } from "@/client/components/PageHeader";
+import { Button } from "@/client/components/ui/button";
+import { Input } from "@/client/components/ui/input";
+import { Textarea } from "@/client/components/ui/textarea";
 
 const SECTION_HINTS: Record<ProjectContextSectionKey, string> = {
   business_overview: "卖什么、卖给谁、卖到哪里。",
@@ -57,57 +54,44 @@ export function ProjectContextPage({ projectId }: { projectId: string }) {
     staleTime: 0,
   });
 
-  if (contextQuery.isPending) {
-    return (
-      <div className="flex justify-center py-10">
-        <span className="loading loading-spinner loading-md" />
-      </div>
-    );
-  }
-
-  if (contextQuery.isError) {
-    return (
-      <div className="alert alert-error">
-        <span className="text-sm">
-          {getStandardErrorMessage(
-            contextQuery.error,
-            "无法加载项目上下文",
-          )}
-        </span>
-      </div>
-    );
-  }
-
-  const context = contextQuery.data;
-
   return (
-    // key remounts the whole page when the project switches under it, so no
-    // draft, open form, or edit state can carry over to another project.
-    <div key={projectId} className="space-y-8">
-      <p className="text-sm text-base-content/70">
-        SAM、Claude Code 以及任何已连接的 MCP 客户端对这个项目的了解。它们在动手前会先读取这些内容，并写回学到的信息，所以看起来不对的地方请直接改正。
-      </p>
+    <QueryState
+      query={contextQuery}
+      errorFallback="无法加载项目上下文"
+    >
+      {(context) => (
+        // key remounts the whole page when the project switches under it, so no
+        // draft, open form, or edit state can carry over to another project.
+        <div key={projectId} className="space-y-8">
+          <p className="text-sm text-muted-foreground">
+            Claude Code 及其他已连接的 MCP 客户端对这个项目的了解。它们开工前会先读这些内容，并把学到的写回来，所以看起来不对的地方请改掉。
+          </p>
 
-      <ProseSections
-        projectId={projectId}
-        sections={context.sections}
-        missingSections={context.missingSections}
-      />
+          <ProseSections
+            projectId={projectId}
+            sections={context.sections}
+            missingSections={context.missingSections}
+          />
 
-      <CompetitorsSection
-        projectId={projectId}
-        competitors={context.competitors}
-      />
+          <CompetitorsSection
+            projectId={projectId}
+            competitors={context.competitors}
+          />
 
-      <KeyPagesSection projectId={projectId} keyPages={context.keyPages} />
+          <KeyPagesSection projectId={projectId} keyPages={context.keyPages} />
 
-      <CustomSections
-        projectId={projectId}
-        customSections={context.customSections}
-      />
+          <CustomSections
+            projectId={projectId}
+            customSections={context.customSections}
+          />
 
-      <ResearchLog projectId={projectId} researchLog={context.researchLog} />
-    </div>
+          <ResearchLog
+            projectId={projectId}
+            researchLog={context.researchLog}
+          />
+        </div>
+      )}
+    </QueryState>
   );
 }
 
@@ -165,9 +149,12 @@ function ProseSections({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {missingSections.length === PROJECT_CONTEXT_SECTION_KEYS.length ? (
-        <EmptyState>
-          还没有任何记录。先填你知道的内容，或让 SAM 根据网站起草，再核对它写对了哪些。
-        </EmptyState>
+        <EmptyState
+          size="sm"
+          icon={null}
+          title="还没有任何内容"
+          description="能填的先填——或让智能体根据你的网站起草，再确认写对的部分。"
+        />
       ) : null}
 
       {PROJECT_CONTEXT_SECTION_KEYS.map((key) => {
@@ -177,18 +164,20 @@ function ProseSections({
             <div className="flex flex-wrap items-baseline justify-between gap-x-3">
               <label
                 htmlFor={`context-${key}`}
-                className="text-sm font-medium text-base-content"
+                className="text-sm font-medium text-foreground"
               >
-                {SECTION_LABELS[key]}
+                {PROJECT_CONTEXT_SECTION_LABELS[key]}
               </label>
               {section ? (
                 <Provenance by={section.updatedBy} at={section.updatedAt} />
               ) : (
-                <span className="text-xs text-base-content/40">空</span>
+                <span className="text-xs text-muted-foreground">空</span>
               )}
             </div>
-            <p className="text-xs text-base-content/50">{SECTION_HINTS[key]}</p>
-            <textarea
+            <p className="text-xs text-muted-foreground">
+              {SECTION_HINTS[key]}
+            </p>
+            <Textarea
               id={`context-${key}`}
               value={draftOf(key)}
               onChange={(event) => {
@@ -207,20 +196,19 @@ function ProseSections({
               rows={4}
               maxLength={PROSE_MAX_CHARS}
               placeholder={SECTION_PLACEHOLDERS[key]}
-              className="textarea textarea-bordered w-full text-sm"
             />
           </div>
         );
       })}
 
       <div className="flex justify-end">
-        <button
+        <Button
           type="submit"
-          className="btn btn-primary btn-sm"
+          size="sm"
           disabled={update.isPending || changed.length === 0}
         >
           保存更改
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -244,9 +232,12 @@ function CustomSections({
       />
 
       {customSections.length === 0 ? (
-        <EmptyState>
-          这里还没有内容。智能体学到重要信息却无处归类时，会新增一个分区。
-        </EmptyState>
+        <EmptyState
+          size="sm"
+          icon={null}
+          title="这里还没有内容"
+          description="智能体学到重要内容又无处安放时，会新增一个分区。"
+        />
       ) : (
         <div className="space-y-3">
           {customSections.map((custom) =>
@@ -266,7 +257,7 @@ function CustomSections({
             ) : (
               <div
                 key={custom.slug}
-                className="space-y-2 rounded-lg border border-base-300 p-3"
+                className="space-y-2 rounded-lg border border-border bg-card p-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -276,15 +267,15 @@ function CustomSections({
                     <Provenance by={custom.updatedBy} at={custom.updatedAt} />
                   </div>
                   <RowActions>
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs"
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       aria-label={`编辑 ${custom.title ?? custom.slug}`}
                       onClick={() => setEditingSlug(custom.slug)}
                     >
                       <Pencil className="size-3.5" />
-                    </button>
-                    <ConfirmDeleteButton
+                    </Button>
+                    <InlineConfirm
                       label={`删除 ${custom.title ?? custom.slug}`}
                       pending={update.isPending}
                       onConfirm={() =>
@@ -293,7 +284,7 @@ function CustomSections({
                     />
                   </RowActions>
                 </div>
-                <p className="whitespace-pre-wrap text-sm text-base-content/70">
+                <p className="whitespace-pre-wrap text-sm text-muted-foreground">
                   {custom.content}
                 </p>
               </div>
@@ -321,34 +312,32 @@ function CustomSectionForm({
 
   return (
     <form
-      className="space-y-2 rounded-lg border border-base-300 bg-base-200/40 p-3"
+      className="space-y-2 rounded-lg border border-border bg-muted/40 p-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (pending || !content.trim()) return;
         onSave(title.trim() || custom.slug, content);
       }}
     >
-      <input
-        type="text"
+      <Input
         value={title}
         onChange={(event) => setTitle(event.target.value)}
         placeholder={custom.slug}
         maxLength={120}
-        className="input input-bordered input-sm w-full"
         aria-label="分区标题"
       />
-      <textarea
+      <Textarea
         value={content}
         onChange={(event) => setContent(event.target.value)}
         rows={5}
         maxLength={PROSE_MAX_CHARS}
-        className="textarea textarea-bordered w-full text-sm"
         aria-label="分区内容"
       />
       <FormActions
         pending={pending}
         disabled={!content.trim()}
         onCancel={onCancel}
+        size="xs"
       />
     </form>
   );
@@ -371,9 +360,12 @@ function ResearchLog({
       />
 
       {researchLog.length === 0 ? (
-        <EmptyState>
-          还没有日志。智能体在执行付费研究时会记录在这里。
-        </EmptyState>
+        <EmptyState
+          size="sm"
+          icon={null}
+          title="还没有记录"
+          description="智能体执行付费研究时会记在这里。"
+        />
       ) : (
         <ul className={listClass}>
           {researchLog.map((entry) => (
@@ -382,14 +374,14 @@ function ResearchLog({
               className="flex items-start justify-between gap-3 p-3"
             >
               <div className="min-w-0 space-y-0.5">
-                <p className="text-sm text-base-content/80">{entry.summary}</p>
-                <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-base-content/40">
+                <p className="text-sm text-foreground">{entry.summary}</p>
+                <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
                   <span>{entry.entryDate}</span>
                   <Provenance by={entry.createdBy} />
                 </div>
               </div>
               <RowActions>
-                <ConfirmDeleteButton
+                <InlineConfirm
                   label={`删除 ${entry.entryDate} 的日志`}
                   pending={update.isPending}
                   onConfirm={() =>

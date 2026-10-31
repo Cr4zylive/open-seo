@@ -1,13 +1,16 @@
+import { BackButton } from "@/client/components/PageHeader";
+import { ExportMenu } from "@/client/components/ExportMenu";
+import { SkeletonTableRows } from "@/client/components/SkeletonPresets";
+import { Card, CardContent } from "@/client/components/ui/card";
 import {
-  ChevronDown,
-  Copy,
-  Download,
-  FileWarning,
-  Info,
-  Sheet,
-  TriangleAlert,
-} from "lucide-react";
-import { PortalMenu } from "@/client/components/PortalMenu";
+  Table,
+  TableBody,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/client/components/ui/tabs";
+import { SeverityBadge } from "@/client/features/audit/shared";
 import type {
   CategoryTab,
   ExportPayload,
@@ -21,16 +24,16 @@ import { categoryLabel } from "./utils";
 import { categoryTabs } from "./types";
 
 export function LighthouseIssuesHeader({
-  backLabel,
   onBack,
+  isLoading,
   scannedAt,
   finalUrl,
   scores,
   metrics,
   severityCounts,
 }: {
-  backLabel: string;
   onBack: () => void;
+  isLoading: boolean;
   scannedAt?: string;
   finalUrl?: string;
   scores?: LighthouseScores | null;
@@ -40,41 +43,38 @@ export function LighthouseIssuesHeader({
   return (
     <>
       <div className="flex items-center justify-between gap-3">
-        <button className="btn btn-ghost btn-sm px-2" onClick={onBack}>
-          ← 返回 {backLabel}
-        </button>
-        <span className="text-xs text-base-content/60">
+        <BackButton onClick={onBack}>站点审计</BackButton>
+        <span className="text-xs text-muted-foreground">
           {scannedAt
-            ? `扫描时间：${new Date(scannedAt).toLocaleString()}`
-            : "正在读取最新问题…"}
+            ? `扫描于 ${new Date(scannedAt).toLocaleString()}`
+            : isLoading
+              ? "正在读取最新问题…"
+              : null}
         </span>
       </div>
 
-      <div className="card bg-base-100 border border-base-300">
-        <div className="card-body py-5 gap-4">
+      <Card>
+        <CardContent className="space-y-4">
           <div className="space-y-1">
             <h1 className="text-2xl font-semibold">Lighthouse 问题</h1>
-            <p className="text-sm text-base-content/70 break-all">
-              {finalUrl ?? "正在加载网址…"}
+            <p className="text-sm text-muted-foreground break-all">
+              {finalUrl ?? (isLoading ? "正在加载网址…" : null)}
             </p>
           </div>
           <LighthouseIssuesSummary scores={scores} metrics={metrics} />
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="badge border border-error/30 bg-error/10 text-error/80 gap-1">
-              <FileWarning className="size-3" />
+          <div className="flex flex-wrap gap-2">
+            <SeverityBadge severity="critical">
               严重 {severityCounts.critical}
-            </span>
-            <span className="badge border border-warning/30 bg-warning/10 text-warning/80 gap-1">
-              <TriangleAlert className="size-3" />
+            </SeverityBadge>
+            <SeverityBadge severity="warning">
               警告 {severityCounts.warning}
-            </span>
-            <span className="badge border border-info/30 bg-info/10 text-info/80 gap-1">
-              <Info className="size-3" />
-              信息 {severityCounts.info}
-            </span>
+            </SeverityBadge>
+            <SeverityBadge severity="info">
+              提示 {severityCounts.info}
+            </SeverityBadge>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </>
   );
 }
@@ -89,8 +89,7 @@ export function LighthouseIssuesToolbar({
   onCategoryChange,
   onCopy,
   onExport,
-  onExportCsv,
-  onExportSheets,
+  onExportRows,
 }: {
   category: CategoryTab;
   categoryCounts: Record<CategoryTab, number>;
@@ -101,8 +100,8 @@ export function LighthouseIssuesToolbar({
   onCategoryChange: (next: CategoryTab) => void;
   onCopy: (data: ExportPayload, toastMessage: string) => void;
   onExport: (data: ExportPayload) => void;
-  onExportCsv: (issues: LighthouseIssue[], variant: "all" | "current") => void;
-  onExportSheets: (
+  onExportRows: (
+    format: "csv" | "sheets",
     issues: LighthouseIssue[],
     variant: "all" | "current",
   ) => void;
@@ -110,10 +109,42 @@ export function LighthouseIssuesToolbar({
   const exportCurrentCategory: ExportPayload =
     category === "all" ? { mode: "issues" } : { mode: "category", category };
 
-  const categoryLabelLower = selectedCategoryLabel;
+  // One menu section per scope. The saved payload has no issue rows, so it
+  // offers only the JSON formats.
+  const scopes: Array<{
+    id: string;
+    label: string;
+    actions?: Array<"copy-json" | "json">;
+    issues: LighthouseIssue[];
+    payload: ExportPayload;
+    copied: string;
+  }> = [
+    {
+      id: "current",
+      label: `${selectedCategoryLabel}问题`,
+      issues: visibleIssues,
+      payload: exportCurrentCategory,
+      copied: `已复制${selectedCategoryLabel}问题`,
+    },
+    {
+      id: "all",
+      label: "全部可处理问题",
+      issues: allIssues,
+      payload: { mode: "issues" },
+      copied: "全部可处理问题已复制",
+    },
+    {
+      id: "full",
+      label: "已保存的 Lighthouse 数据",
+      actions: ["copy-json", "json"],
+      issues: [],
+      payload: { mode: "full" },
+      copied: "已保存的 Lighthouse 数据已复制",
+    },
+  ];
 
   return (
-    <div className="sticky top-0 z-[2] -mx-2 px-2 py-2 bg-base-100/95 backdrop-blur-sm border-b border-base-300/60">
+    <div className="border-b border-border px-4 py-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <CategoryTabs
           category={category}
@@ -121,15 +152,21 @@ export function LighthouseIssuesToolbar({
           onCategoryChange={onCategoryChange}
         />
         <ExportMenu
-          allIssues={allIssues}
-          categoryLabelLower={categoryLabelLower}
-          exportCurrentCategory={exportCurrentCategory}
-          isBusy={isBusy}
-          onCopy={onCopy}
-          onExport={onExport}
-          onExportCsv={onExportCsv}
-          onExportSheets={onExportSheets}
-          visibleIssues={visibleIssues}
+          actions={["sheets", "csv", "copy-json", "json"]}
+          busy={isBusy}
+          scopes={scopes}
+          onExport={(action, scopeId) => {
+            const scope = scopes.find((item) => item.id === scopeId);
+            if (!scope) return;
+            if (action === "copy-json") onCopy(scope.payload, scope.copied);
+            else if (action === "json") onExport(scope.payload);
+            else
+              onExportRows(
+                action,
+                scope.issues,
+                scopeId === "all" ? "all" : "current",
+              );
+          }}
         />
       </div>
     </div>
@@ -146,198 +183,21 @@ function CategoryTabs({
   onCategoryChange: (next: CategoryTab) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      {categoryTabs.map((tab) => (
-        <button
-          key={tab}
-          className={`pb-2 border-b-2 text-sm font-medium transition-colors ${
-            category === tab
-              ? "border-primary text-base-content"
-              : "border-transparent text-base-content/60 hover:text-base-content"
-          }`}
-          onClick={() => onCategoryChange(tab)}
-        >
-          <span>{categoryLabel(tab)}</span>
-          <span className="ml-1 text-xs opacity-70">
-            ({categoryCounts[tab]})
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function ExportMenu({
-  allIssues,
-  categoryLabelLower,
-  exportCurrentCategory,
-  isBusy,
-  onCopy,
-  onExport,
-  onExportCsv,
-  onExportSheets,
-  visibleIssues,
-}: {
-  allIssues: LighthouseIssue[];
-  categoryLabelLower: string;
-  exportCurrentCategory: ExportPayload;
-  isBusy: boolean;
-  onCopy: (data: ExportPayload, toastMessage: string) => void;
-  onExport: (data: ExportPayload) => void;
-  onExportCsv: (issues: LighthouseIssue[], variant: "all" | "current") => void;
-  onExportSheets: (
-    issues: LighthouseIssue[],
-    variant: "all" | "current",
-  ) => void;
-  visibleIssues: LighthouseIssue[];
-}) {
-  return (
-    <PortalMenu
-      ariaLabel="导出 Lighthouse 问题"
-      triggerClassName="btn btn-sm gap-1"
-      triggerContent={
-        <>
-          <Download className="size-4" />
-          导出
-          <ChevronDown className="size-3 opacity-60" />
-        </>
-      }
-      menuClassName="w-72 max-h-[min(30rem,70vh)] flex-nowrap overflow-y-auto"
+    <Tabs
+      value={category}
+      onValueChange={(next: CategoryTab) => onCategoryChange(next)}
     >
-      {(close) => (
-        <>
-          <li className="menu-title">
-            <span>导出到 Google 表格</span>
-          </li>
-          <li>
-            <button
-              disabled={!visibleIssues.length}
-              onClick={() => {
-                close();
-                onExportSheets(visibleIssues, "current");
-              }}
-            >
-              <Sheet className="size-4" />在 Google 表格中打开：{" "}
-              {categoryLabelLower}
-            </button>
-          </li>
-          <li>
-            <button
-              disabled={!allIssues.length}
-              onClick={() => {
-                close();
-                onExportSheets(allIssues, "all");
-              }}
-            >
-              <Sheet className="size-4" />在 Google 表格中打开全部可处理问题
-            </button>
-          </li>
-          <li className="menu-title">
-            <span>复制</span>
-          </li>
-          <li>
-            <button
-              disabled={isBusy}
-              onClick={() => {
-                close();
-                onCopy(
-                  exportCurrentCategory,
-                  `已复制${categoryLabelLower}问题`,
-                );
-              }}
-            >
-              <Copy className="size-4" />
-              复制{categoryLabelLower}问题
-            </button>
-          </li>
-          <li>
-            <button
-              disabled={isBusy}
-              onClick={() => {
-                close();
-                onCopy({ mode: "issues" }, "全部可处理问题已复制");
-              }}
-            >
-              <Copy className="size-4" />
-              复制全部可处理问题
-            </button>
-          </li>
-          <li>
-            <button
-              disabled={isBusy}
-              onClick={() => {
-                close();
-                onCopy({ mode: "full" }, "已保存的 Lighthouse 数据已复制");
-              }}
-            >
-              <Copy className="size-4" />
-              复制已保存的 Lighthouse 数据
-            </button>
-          </li>
-          <li className="menu-title">
-            <span>下载 JSON</span>
-          </li>
-          <li>
-            <button
-              disabled={isBusy}
-              onClick={() => {
-                close();
-                onExport(exportCurrentCategory);
-              }}
-            >
-              下载{categoryLabelLower}问题
-            </button>
-          </li>
-          <li>
-            <button
-              disabled={isBusy}
-              onClick={() => {
-                close();
-                onExport({ mode: "issues" });
-              }}
-            >
-              下载全部可处理问题
-            </button>
-          </li>
-          <li>
-            <button
-              disabled={isBusy}
-              onClick={() => {
-                close();
-                onExport({ mode: "full" });
-              }}
-            >
-              下载已保存的 Lighthouse 数据
-            </button>
-          </li>
-          <li className="menu-title">
-            <span>下载 CSV</span>
-          </li>
-          <li>
-            <button
-              disabled={!visibleIssues.length}
-              onClick={() => {
-                close();
-                onExportCsv(visibleIssues, "current");
-              }}
-            >
-              下载{categoryLabelLower}问题
-            </button>
-          </li>
-          <li>
-            <button
-              disabled={!allIssues.length}
-              onClick={() => {
-                close();
-                onExportCsv(allIssues, "all");
-              }}
-            >
-              下载全部可处理问题
-            </button>
-          </li>
-        </>
-      )}
-    </PortalMenu>
+      <TabsList variant="line" className="h-auto! flex-wrap justify-start">
+        {categoryTabs.map((tab) => (
+          <TabsTrigger key={tab} value={tab}>
+            {categoryLabel(tab)}
+            <span className="text-xs text-muted-foreground">
+              ({categoryCounts[tab]})
+            </span>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 
@@ -351,43 +211,37 @@ export function LighthouseIssueList({
   emptyMessage?: string;
 }) {
   if (isLoading) {
-    return <p className="text-sm text-base-content/60">正在加载问题…</p>;
+    return <SkeletonTableRows className="p-4" rows={5} columns={3} />;
   }
   if (!issues.length) {
     return (
-      <p className="text-sm text-base-content/60">
+      <p className="p-4 text-sm text-muted-foreground">
         {emptyMessage ?? "此分类下没有可处理的问题。"}
       </p>
     );
   }
   return (
-    <table className="table table-sm w-full table-fixed">
-      <colgroup>
-        <col className="w-8" />
-        <col className="w-24" />
-        <col />
-        <col className="w-28 hidden sm:table-column" />
-        <col className="w-28 hidden md:table-column" />
-        <col className="w-14" />
-      </colgroup>
-      <thead>
-        <tr className="text-xs text-base-content/50 uppercase tracking-wide border-b border-base-300">
-          <th />
-          <th className="font-medium">严重程度</th>
-          <th className="font-medium">问题</th>
-          <th className="font-medium hidden sm:table-cell">分类</th>
-          <th className="font-medium hidden md:table-cell text-right">影响</th>
-          <th className="font-medium text-right">难度</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-base-300/60">
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-8" />
+          <TableHead className="w-24">严重程度</TableHead>
+          <TableHead>问题</TableHead>
+          <TableHead className="hidden w-28 sm:table-cell">分类</TableHead>
+          <TableHead className="hidden w-28 md:table-cell text-right">
+            影响
+          </TableHead>
+          <TableHead className="w-14 text-right">分数</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
         {issues.map((issue, issueIndex) => (
           <LighthouseIssueRow
             key={`${issue.category}-${issue.auditKey}-${issueIndex}`}
             issue={issue}
           />
         ))}
-      </tbody>
-    </table>
+      </TableBody>
+    </Table>
   );
 }

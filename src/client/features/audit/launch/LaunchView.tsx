@@ -1,72 +1,101 @@
-import { useCustomer } from "autumn-js/react";
+import { ConfirmDialog } from "@/client/components/ConfirmDialog";
+import { PageHeader } from "@/client/components/PageHeader";
 import { AuditHistorySection } from "@/client/features/audit/launch/AuditHistorySection";
 import { LaunchFormCard } from "@/client/features/audit/launch/LaunchFormCard";
 import { useLaunchController } from "@/client/features/audit/launch/useLaunchController";
-import { getCustomerPlanStatus } from "@/client/features/billing/plan-detection";
-import { useSession } from "@/lib/auth-client";
+import { useHostedPlanGate } from "@/client/features/billing/HostedPlanGate";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import {
+  RENDERING_COST_NOTE,
+  renderingCostText,
+} from "@/shared/audit-rendering";
 
 type LaunchViewProps = {
   projectId: string;
+  initialUrl: string;
   onAuditStarted: (auditId: string) => void;
 };
 
-export function LaunchView(props: LaunchViewProps) {
-  // Self-hosted has no Autumn customer and resolves to the paid tier on the
-  // server, so only hosted mode needs to look up the plan.
-  if (!isHostedClientAuthMode()) {
-    return <LaunchContent {...props} isFreePlan={false} />;
-  }
-
-  return <HostedLaunchView {...props} />;
-}
-
-function HostedLaunchView(props: LaunchViewProps) {
-  const { data: session } = useSession();
-  const customerQuery = useCustomer({
-    queryOptions: {
-      enabled: Boolean(session?.user?.id),
-    },
-  });
-
-  // Until the customer loads, leave the form unrestricted rather than flash
-  // free-plan copy at paid users; the server enforces the limit regardless.
-  const isFreePlan =
-    customerQuery.data != null &&
-    getCustomerPlanStatus(customerQuery.data) === "free";
-
-  return <LaunchContent {...props} isFreePlan={isFreePlan} />;
-}
-
-function LaunchContent({
+export function LaunchView({
   projectId,
-  isFreePlan,
+  initialUrl,
   onAuditStarted,
-}: LaunchViewProps & { isFreePlan: boolean }) {
+}: LaunchViewProps) {
+  // The plan only sets the page limit, so the form stays usable while the
+  // plan loads. The server enforces the limit regardless.
+  const isFreePlan = useHostedPlanGate() === "free";
   const controller = useLaunchController({
     projectId,
+    initialUrl,
     isFreePlan,
     onAuditStarted,
   });
 
   return (
     <div className="px-4 py-4 md:px-6 md:py-6 pb-24 md:pb-8 overflow-auto">
-      <div className="mx-auto max-w-5xl space-y-4">
-        <h1 className="text-2xl font-semibold">站点审计</h1>
+      <div className="mx-auto max-w-7xl space-y-4">
+        <PageHeader title="站点审计" />
 
         <LaunchFormCard
           launchForm={controller.launchForm}
           commitMaxPagesInput={controller.commitMaxPagesInput}
           maxPagesLimit={controller.maxPagesLimit}
+          canRenderJavaScript={controller.canRenderJavaScript}
+          outOfCredits={controller.outOfCredits}
         />
 
         <AuditHistorySection
           projectId={projectId}
-          history={controller.historyQuery.data ?? []}
-          isLoading={controller.historyQuery.isLoading}
+          historyQuery={controller.historyQuery}
           onDelete={controller.deleteAudit}
         />
+
+        {controller.largeCrawlPages != null ? (
+          <LargeCrawlDialog
+            pages={controller.largeCrawlPages}
+            renderJavaScript={controller.renderJavaScript}
+            onConfirm={controller.confirmLargeCrawl}
+            onClose={controller.cancelLargeCrawl}
+          />
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function LargeCrawlDialog({
+  pages,
+  renderJavaScript,
+  onConfirm,
+  onClose,
+}: {
+  pages: number;
+  renderJavaScript: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const pageCount = pages.toLocaleString();
+  // Only hosted plans pay for rendering, so only they see a price.
+  const priced = renderJavaScript && isHostedClientAuthMode();
+  return (
+    <ConfirmDialog
+      title={
+        priced ? `渲染最多 ${pageCount} 个页面？` : "开始大规模审计？"
+      }
+      confirmLabel={priced ? "开始审计" : "继续"}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    >
+      {priced ? (
+        <>
+          {RENDERING_COST_NOTE} 渲染审计通常比普通审计耗时更长。
+          <span className="mt-3 block font-semibold text-foreground">
+            {renderingCostText(pages)}
+          </span>
+        </>
+      ) : (
+        `即将抓取 ${pageCount} 个页面。可以继续，但可能需要一些时间。要继续吗？`
+      )}
+    </ConfirmDialog>
   );
 }

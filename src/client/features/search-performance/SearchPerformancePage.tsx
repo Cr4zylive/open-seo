@@ -1,145 +1,116 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   keepPreviousData,
-  queryOptions,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Download, Loader2, Sheet } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
-import { TableExportMenu } from "@/client/components/table/TableBulkActionBar";
-import { TablePagination } from "@/client/components/table/TablePagination";
-import { SearchConsoleConnectionCard } from "@/client/features/gsc/SearchConsoleConnectionCard";
+import { QueryError } from "@/client/components/QueryState";
+import { ExportMenu } from "@/client/components/ExportMenu";
+import { Badge } from "@/client/components/ui/badge";
+import { Button } from "@/client/components/ui/button";
+import { Spinner } from "@/client/components/ui/spinner";
+import { DataTableTabs } from "@/client/components/table/DataTableToolbar";
+import { TabsTrigger } from "@/client/components/ui/tabs";
+import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
+import { DimensionSection } from "@/client/features/search-performance/SearchPerformanceDimensionSection";
+import { SearchPerformanceSelects } from "@/client/features/search-performance/SearchPerformanceSelects";
 import { SearchPerformanceLoadingState } from "@/client/features/search-performance/SearchPerformanceLoadingState";
 import {
-  DimensionTable,
+  tableQueryOptions,
+  type FilterInput,
+} from "@/client/features/search-performance/searchPerformanceQueries";
+import {
+  SearchPerformanceTextFilters,
+  type TextFilters,
+} from "@/client/features/search-performance/SearchPerformanceTextFilters";
+import {
   exportDimensionRows,
   exportStriking,
   StrikingDistanceTable,
-  TabButton,
-  TotalsCards,
+  TotalsTable,
   type ExportTarget,
-  type Tab,
 } from "@/client/features/search-performance/SearchPerformanceParts";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import {
   exportSearchPerformanceTable,
   getSearchPerformanceReport,
-  getSearchPerformanceTable,
 } from "@/serverFunctions/searchPerformance";
 import {
-  GSC_DEVICES,
   SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE,
-  SEARCH_PERFORMANCE_PAGE_SIZES,
-  SEARCH_PERFORMANCE_RANGES,
-  type SearchPerformanceDateRange,
-  type SearchPerformanceDevice,
+  SEARCH_PERFORMANCE_TABS,
+  type SearchPerformanceSearch,
+  type SearchPerformanceTab,
   type SearchPerformanceTableDimension,
 } from "@/types/schemas/search-performance";
 
-const RANGE_LABELS: Record<SearchPerformanceDateRange, string> = {
-  last_7_days: "最近 7 天",
-  last_28_days: "最近 28 天",
-  last_3_months: "最近 3 个月",
-};
-const RANGE_OPTIONS = SEARCH_PERFORMANCE_RANGES.map((value) => ({
-  value,
-  label: RANGE_LABELS[value],
-}));
-
-const DEVICE_LABELS: Record<SearchPerformanceDevice, string> = {
-  DESKTOP: "桌面端",
-  MOBILE: "移动端",
-  TABLET: "平板设备",
-};
-const DEVICE_OPTIONS = GSC_DEVICES.map((value) => ({
-  value,
-  label: DEVICE_LABELS[value],
-}));
-
-// Sentinel for "no filter" in the selects; never sent to the server.
-const ALL = "ALL";
-
-function isDateRange(value: string): value is SearchPerformanceDateRange {
-  return SEARCH_PERFORMANCE_RANGES.some((option) => option === value);
-}
-
-function isDevice(value: string): value is SearchPerformanceDevice {
-  return GSC_DEVICES.some((option) => option === value);
-}
-
-function tabDimension(tab: Tab): SearchPerformanceTableDimension {
+function tabDimension(
+  tab: SearchPerformanceTab,
+): SearchPerformanceTableDimension {
   return tab === "pages" ? "page" : "query";
 }
 
-type FilterInput = {
-  dateRange: SearchPerformanceDateRange;
-  device?: SearchPerformanceDevice;
-  country?: string;
-};
-
-// The server filter payload: drop device/country when set to the "ALL" sentinel.
-function buildFilterInput(
-  range: SearchPerformanceDateRange,
-  device: SearchPerformanceDevice | typeof ALL,
-  country: string,
-): FilterInput {
+function buildFilterInput({
+  range = "last_28_days",
+  device,
+  country,
+}: Pick<SearchPerformanceSearch, "range" | "device" | "country">): FilterInput {
   return {
     dateRange: range,
-    ...(device === ALL ? {} : { device }),
-    ...(country === ALL ? {} : { country }),
+    ...(device ? { device } : {}),
+    ...(country ? { country } : {}),
   };
 }
 
-// Single source for the paginated table query, shared by the live query and the
-// warm-on-connect prefetch so their key + fn can never drift apart.
-function tableQueryOptions(
-  projectId: string,
-  dimension: SearchPerformanceTableDimension,
-  page: number,
-  pageSize: number,
-  filterInput: FilterInput,
-) {
-  return queryOptions({
-    queryKey: [
-      "searchPerformanceTable",
-      projectId,
-      dimension,
-      page,
-      pageSize,
-      filterInput,
-    ],
-    queryFn: () =>
-      getSearchPerformanceTable({
-        data: { projectId, dimension, page, pageSize, ...filterInput },
-      }),
-  });
-}
-
-export function SearchPerformancePage({ projectId }: { projectId: string }) {
+export function SearchPerformancePage({
+  projectId,
+  search,
+  onSearchChange,
+}: {
+  projectId: string;
+  search: SearchPerformanceSearch;
+  onSearchChange: (update: Partial<SearchPerformanceSearch>) => void;
+}) {
   const queryClient = useQueryClient();
-  const [range, setRange] =
-    useState<SearchPerformanceDateRange>("last_28_days");
-  const [device, setDevice] = useState<SearchPerformanceDevice | typeof ALL>(
-    ALL,
+  const { range, device, country } = search;
+  const textFilters = useMemo<TextFilters>(
+    () => ({
+      pageFilter: search.pageText
+        ? {
+            operator: search.pageMatch ?? "contains",
+            expression: search.pageText,
+          }
+        : undefined,
+      queryFilter: search.queryText
+        ? {
+            operator: search.queryMatch ?? "contains",
+            expression: search.queryText,
+          }
+        : undefined,
+    }),
+    [search.pageText, search.pageMatch, search.queryText, search.queryMatch],
   );
-  const [country, setCountry] = useState<string>(ALL);
-  const [tab, setTab] = useState<Tab>("striking");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(
-    SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE,
-  );
+  const [showFilters, setShowFilters] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const activeFilterCount =
+    Number(Boolean(textFilters.pageFilter)) +
+    Number(Boolean(textFilters.queryFilter)) +
+    Number(Boolean(country)) +
+    Number(Boolean(device)) +
+    Number(range !== undefined && range !== "last_28_days");
+  const tab = search.tab ?? "striking";
+  const page = search.page ?? 1;
+  const pageSize = search.size ?? SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE;
 
-  // Any change to the query set (tab, filters, page size) restarts at page 1.
-  useEffect(() => {
-    setPage(1);
-  }, [tab, range, device, country, pageSize]);
-
-  const filterInput = buildFilterInput(range, device, country);
+  const filterInput = {
+    ...buildFilterInput({ range, device, country }),
+    ...textFilters,
+  };
 
   const reportQuery = useQuery({
-    queryKey: ["searchPerformance", projectId, range, device, country],
+    queryKey: ["searchPerformance", projectId, filterInput],
     queryFn: () =>
       getSearchPerformanceReport({ data: { projectId, ...filterInput } }),
     placeholderData: keepPreviousData,
@@ -151,11 +122,14 @@ export function SearchPerformancePage({ projectId }: { projectId: string }) {
   const tableQuery = useQuery({
     ...tableQueryOptions(projectId, dimension, page, pageSize, filterInput),
     enabled: report?.connected === true && isTableTab,
-    placeholderData: keepPreviousData,
+    // Hold the current rows while paging or filtering, but not across a tab
+    // or project change: Query rows must not render under the Pages header.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === projectId &&
+      previousQuery.queryKey[2] === dimension
+        ? previous
+        : undefined,
   });
-  const tableData = tableQuery.data;
-  const tableRows = tableData?.connected ? tableData.rows : [];
-  const hasNextPage = tableData?.connected ? tableData.hasNextPage : false;
 
   // Warm the Queries tab (first page) as soon as the report connects so the tab
   // opens instantly instead of showing a spinner. Free first-party GSC data.
@@ -167,34 +141,86 @@ export function SearchPerformancePage({ projectId }: { projectId: string }) {
         "query",
         1,
         SEARCH_PERFORMANCE_DEFAULT_PAGE_SIZE,
-        buildFilterInput(range, device, country),
+        { ...buildFilterInput({ range, device, country }), ...textFilters },
       ),
     );
-  }, [report?.connected, projectId, range, device, country, queryClient]);
+  }, [
+    report?.connected,
+    projectId,
+    range,
+    device,
+    country,
+    textFilters,
+    queryClient,
+  ]);
 
   const handleExport = async (target: ExportTarget) => {
-    if (!report?.connected) return;
+    if (!report?.connected || reportQuery.isPlaceholderData || isExporting)
+      return;
+    setIsExporting(true);
     try {
       if (tab === "striking") {
-        exportStriking(report, target);
+        await exportStriking(report, target);
         return;
       }
       const data = await exportSearchPerformanceTable({
         data: { projectId, dimension, ...filterInput },
       });
-      exportDimensionRows(dimension, data.rows, report.range, target);
+      await exportDimensionRows(dimension, data.rows, report.range, target);
     } catch (error) {
       toast.error(getStandardErrorMessage(error, "导出失败"));
+    } finally {
+      setIsExporting(false);
     }
   };
 
+  const resetFilters = () =>
+    onSearchChange({
+      page: undefined,
+      pageText: undefined,
+      pageMatch: undefined,
+      queryText: undefined,
+      queryMatch: undefined,
+      country: undefined,
+      device: undefined,
+      range: undefined,
+    });
+
+  const reportError = (
+    <QueryError
+      error={reportQuery.error}
+      fallback="无法加载 Search Console 数据"
+      onRetry={() => void reportQuery.refetch()}
+      isRetrying={reportQuery.isFetching}
+    />
+  );
+
+  const filtersPanel = (
+    <SearchPerformanceTextFilters
+      // Remount on URL changes (back/forward) so the draft matches.
+      key={JSON.stringify(textFilters)}
+      value={textFilters}
+      activeFilterCount={activeFilterCount}
+      onApply={(filters) => {
+        onSearchChange({
+          page: undefined,
+          pageText: filters.pageFilter?.expression,
+          pageMatch: filters.pageFilter?.operator,
+          queryText: filters.queryFilter?.expression,
+          queryMatch: filters.queryFilter?.operator,
+        });
+      }}
+      onReset={resetFilters}
+    />
+  );
+
   return (
-    <div className="px-4 py-4 pb-24 overflow-auto md:px-6 md:py-6 md:pb-8">
+    <div className="overflow-auto px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-8">
       <div className="mx-auto max-w-7xl space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">搜索表现</h1>
-            <p className="text-sm text-base-content/70">
+            <p className="text-sm text-muted-foreground">
               查看网站在 Google Search Console 中的点击、展示、CTR 和排名。
             </p>
           </div>
@@ -202,151 +228,121 @@ export function SearchPerformancePage({ projectId }: { projectId: string }) {
             <Link
               to="/p/$projectId/settings/integrations"
               params={{ projectId }}
-              className="link link-hover shrink-0 self-start text-sm font-medium text-base-content/60 transition-colors hover:text-base-content sm:mt-1"
+              className="shrink-0 self-start text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:mt-1"
             >
-              更换媒体资源
+              更换资源
             </Link>
           ) : null}
         </div>
 
         {reportQuery.isPending ? (
           <SearchPerformanceLoadingState />
-        ) : reportQuery.isError ? (
-          <div className="alert alert-error">
-            <span className="text-sm">
-              {getStandardErrorMessage(reportQuery.error)}
-            </span>
-          </div>
-        ) : !report?.connected ? (
+        ) : !report ? (
+          <>
+            {filtersPanel}
+            {reportError}
+          </>
+        ) : !report.connected ? (
           <div className="max-w-2xl">
-            <SearchConsoleConnectionCard projectId={projectId} />
+            <GoogleConnectionCard provider="gsc" projectId={projectId} />
           </div>
         ) : (
           <>
-            <TotalsCards report={report} />
-            <div className="overflow-hidden rounded-xl border border-base-300 bg-base-100">
-              <div className="flex flex-col gap-3 border-b border-base-300 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-                <div role="tablist" className="tabs tabs-border w-fit">
-                  <TabButton
-                    active={tab === "striking"}
-                    onClick={() => setTab("striking")}
-                    label={`接近突破（${report.strikingDistance.length}）`}
+            {reportQuery.isError ? reportError : null}
+            {reportQuery.isPlaceholderData ? (
+              <SearchPerformanceLoadingState />
+            ) : (
+              <TotalsTable report={report} />
+            )}
+            <div className="overflow-hidden rounded-xl border border-border bg-card">
+              <DataTableTabs
+                value={tab}
+                onValueChange={(value) => {
+                  const nextTab = SEARCH_PERFORMANCE_TABS.find(
+                    (item) => item === value,
+                  );
+                  if (nextTab)
+                    onSearchChange({ tab: nextTab, page: undefined });
+                }}
+                actions={
+                  <ExportMenu
+                    actions={["sheets", "csv"]}
+                    onExport={(target) => void handleExport(target)}
+                    busy={isExporting}
+                    disabled={reportQuery.isPlaceholderData}
                   />
-                  <TabButton
-                    active={tab === "queries"}
-                    onClick={() => setTab("queries")}
-                    label="查询词"
-                  />
-                  <TabButton
-                    active={tab === "pages"}
-                    onClick={() => setTab("pages")}
-                    label="页面"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {reportQuery.isFetching && !reportQuery.isPending ? (
-                    <Loader2 className="size-4 animate-spin text-base-content/40" />
+                }
+              >
+                <TabsTrigger value="striking">
+                  {reportQuery.isPlaceholderData
+                    ? "冲击距离"
+                    : `冲击距离（${report.strikingDistance.length}）`}
+                </TabsTrigger>
+                <TabsTrigger value="queries">查询</TabsTrigger>
+                <TabsTrigger value="pages">页面</TabsTrigger>
+              </DataTableTabs>
+              <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+                <Button
+                  type="button"
+                  variant={showFilters ? "secondary" : "ghost"}
+                  size="sm"
+                  aria-expanded={showFilters}
+                  aria-controls="search-performance-filters"
+                  onClick={() => setShowFilters((current) => !current)}
+                  title="显示或隐藏表格筛选条件"
+                >
+                  <SlidersHorizontal data-icon="inline-start" />
+                  筛选
+                  {activeFilterCount > 0 ? (
+                    <Badge size="sm">{activeFilterCount}</Badge>
                   ) : null}
-                  <select
-                    className="select select-bordered select-sm w-36"
-                    value={device}
-                    onChange={(event) => {
-                      setDevice(
-                        isDevice(event.target.value) ? event.target.value : ALL,
-                      );
-                    }}
-                    aria-label="设备筛选"
-                  >
-                    <option value={ALL}>全部设备</option>
-                    {DEVICE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="select select-bordered select-sm w-36"
-                    value={country}
-                    onChange={(event) => setCountry(event.target.value)}
-                    aria-label="国家或地区筛选"
-                  >
-                    <option value={ALL}>全部国家或地区</option>
-                    {report.countries.map((row) => (
-                      <option key={row.key} value={row.key}>
-                        {row.key.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="select select-bordered select-sm w-36"
-                    value={range}
-                    onChange={(event) => {
-                      if (isDateRange(event.target.value)) {
-                        setRange(event.target.value);
-                      }
-                    }}
-                    aria-label="日期范围"
-                  >
-                    {RANGE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <TableExportMenu
-                    buttonClassName="btn btn-ghost btn-sm gap-1"
-                    actions={[
-                      {
-                        label: "导出到 Google 表格",
-                        icon: <Sheet className="size-4" />,
-                        onClick: () => void handleExport("sheets"),
-                      },
-                      {
-                        label: "下载 CSV",
-                        icon: <Download className="size-4" />,
-                        onClick: () => void handleExport("csv"),
-                      },
-                    ]}
-                  />
-                </div>
+                </Button>
+                {reportQuery.isFetching && !reportQuery.isPending ? (
+                  <Spinner className="size-4 text-muted-foreground" />
+                ) : null}
+                <SearchPerformanceSelects
+                  search={search}
+                  countries={report.countries}
+                  onSearchChange={onSearchChange}
+                />
               </div>
 
-              {tab === "striking" ? (
+              {showFilters ? filtersPanel : null}
+              {reportQuery.isPlaceholderData ? (
+                <div className="p-8 text-sm" role="status">
+                  正在加载匹配结果…
+                </div>
+              ) : tab === "striking" ? (
                 <StrikingDistanceTable
                   projectId={projectId}
                   rows={report.strikingDistance}
+                  page={page}
+                  pageSize={pageSize}
+                  onPageChange={(nextPage) =>
+                    onSearchChange({ page: nextPage })
+                  }
+                  onPageSizeChange={(size) =>
+                    onSearchChange({ page: undefined, size })
+                  }
+                  isFiltered={activeFilterCount > 0}
+                  onClearFilters={resetFilters}
                 />
-              ) : tableQuery.isPending ? (
-                <div className="flex items-center gap-2 p-8 text-sm text-base-content/60">
-                  <Loader2 className="size-4 animate-spin" /> 加载中…
-                </div>
-              ) : tableQuery.isError ? (
-                <div className="p-4">
-                  <div className="alert alert-error">
-                    <span className="text-sm">
-                      {getStandardErrorMessage(tableQuery.error)}
-                    </span>
-                  </div>
-                </div>
               ) : (
-                <>
-                  <div className="p-4">
-                    <DimensionTable
-                      rows={tableRows}
-                      keyLabel={tab === "queries" ? "查询词" : "页面"}
-                    />
-                  </div>
-                  <TablePagination
-                    page={page}
-                    pageSize={pageSize}
-                    pageSizes={SEARCH_PERFORMANCE_PAGE_SIZES}
-                    totalCount={null}
-                    hasNextPage={hasNextPage}
-                    isLoading={tableQuery.isFetching}
-                    onPageChange={setPage}
-                    onPageSizeChange={setPageSize}
-                  />
-                </>
+                <DimensionSection
+                  projectId={projectId}
+                  tableQuery={tableQuery}
+                  keyLabel={tab === "queries" ? "查询" : "页面"}
+                  page={page}
+                  pageSize={pageSize}
+                  onPageChange={(nextPage) =>
+                    onSearchChange({ page: nextPage })
+                  }
+                  onPageSizeChange={(size) =>
+                    onSearchChange({ page: undefined, size })
+                  }
+                  isFiltered={activeFilterCount > 0}
+                  onClearFilters={resetFilters}
+                />
               )}
             </div>
           </>

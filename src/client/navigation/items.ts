@@ -1,13 +1,16 @@
 import {
   Bookmark,
   Bot,
+  Brain,
+  ChartLine,
   ClipboardCheck,
+  FileText,
   Globe,
   LayoutDashboard,
   Link2,
+  MapPin,
   MessageSquare,
   Search,
-  Sparkles,
   TrendingUp,
 } from "lucide-react";
 import { linkOptions } from "@tanstack/react-router";
@@ -38,6 +41,11 @@ const projectNavItems = [
     icon: TrendingUp,
   },
   {
+    to: "/p/$projectId/local-seo" as const,
+    label: "本地 SEO",
+    icon: MapPin,
+  },
+  {
     to: "/p/$projectId/search-performance" as const,
     label: "GSC 洞察",
     icon: GoogleGlyphMuted,
@@ -58,26 +66,45 @@ const projectNavItems = [
     icon: ClipboardCheck,
   },
   {
-    to: "/p/$projectId/brand-lookup" as const,
-    label: "品牌查询",
-    icon: Sparkles,
+    to: "/p/$projectId/ai-visibility" as const,
+    label: "提示词追踪",
+    icon: ChartLine,
+    activeOptions: { exact: true, includeSearch: false },
+  },
+  {
+    to: "/p/$projectId/ai-visibility/research" as const,
+    label: "提示词研究",
+    icon: Search,
   },
   {
     to: "/p/$projectId/prompt-explorer" as const,
     label: "提示词探索",
     icon: MessageSquare,
   },
+  {
+    to: "/p/$projectId/reports" as const,
+    label: "报告",
+    icon: FileText,
+  },
+  {
+    to: "/p/$projectId/context" as const,
+    label: "项目上下文",
+    icon: Brain,
+  },
 ] as const;
 
+// Project-independent. Rendered inside the project "AI 工具" group when a project
+// is selected, and on its own (connectNavGroup) when none is.
 const aiNavItem = linkOptions({
   to: "/ai" as const,
-  label: "AI 与 MCP",
+  label: "智能体设置",
   icon: Bot,
 });
 
-// Always-visible sidebar group (not project-scoped, unlike the groups below).
+// Shown only when no project is selected; with a project, Agent setup lives in
+// the "AI 工具" group below.
 export const connectNavGroup = {
-  label: "连接",
+  label: "AI 工具",
   items: [aiNavItem],
 };
 
@@ -91,7 +118,7 @@ function getProjectNavItems(projectId: string) {
   );
 }
 
-// Grouped by scope: "My Site" is the project's own domain (tracked data),
+// Grouped by scope: "我的网站" is the project's own domain (tracked data),
 // "Research" is point-at-anything lookup tools.
 export function getProjectNavGroups(projectId: string) {
   const all = getProjectNavItems(projectId);
@@ -109,8 +136,14 @@ export function getProjectNavGroups(projectId: string) {
         byPath("/p/$projectId/keywords"),
         byPath("/p/$projectId/domain"),
         byPath("/p/$projectId/backlinks"),
-        byPath("/p/$projectId/brand-lookup"),
+      ],
+    },
+    {
+      label: "AI 可见度",
+      items: [
+        byPath("/p/$projectId/ai-visibility/research"),
         byPath("/p/$projectId/prompt-explorer"),
+        byPath("/p/$projectId/ai-visibility"),
       ],
     },
     {
@@ -118,8 +151,17 @@ export function getProjectNavGroups(projectId: string) {
       items: [
         byPath("/p/$projectId/search-performance"),
         byPath("/p/$projectId/rank-tracking"),
+        byPath("/p/$projectId/local-seo"),
         byPath("/p/$projectId/saved"),
         byPath("/p/$projectId/audit"),
+      ],
+    },
+    {
+      label: "AI 工具",
+      items: [
+        byPath("/p/$projectId/reports"),
+        byPath("/p/$projectId/context"),
+        aiNavItem,
       ],
     },
   ];

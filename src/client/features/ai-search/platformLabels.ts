@@ -1,18 +1,8 @@
-import type {
-  PromptExplorerModel,
-  WebSearchCountryCode,
-} from "@/types/schemas/ai-search";
+import type { PromptExplorerModel } from "@/types/schemas/ai-search";
 
 const MENTION_PLATFORM_LABELS: Record<"chat_gpt" | "google", string> = {
   chat_gpt: "ChatGPT",
   google: "Google AI Overview",
-};
-
-const MODEL_LABELS: Record<PromptExplorerModel, string> = {
-  chat_gpt: "ChatGPT",
-  claude: "Claude",
-  gemini: "Gemini",
-  perplexity: "Perplexity",
 };
 
 /**
@@ -59,43 +49,8 @@ export const PLATFORM_SHORT_LABEL: Record<"chat_gpt" | "google", string> = {
   google: "Google",
 };
 
-export function formatModelLabel(model: PromptExplorerModel): string {
-  return MODEL_LABELS[model];
-}
-
 export function getModelAccent(model: PromptExplorerModel): ModelAccent {
   return MODEL_ACCENTS[model];
-}
-
-const COUNTRY_LABELS: Record<WebSearchCountryCode, string> = {
-  US: "美国",
-  GB: "英国",
-  CA: "加拿大",
-  AU: "澳大利亚",
-  IE: "爱尔兰",
-  DE: "德国",
-  FR: "法国",
-  ES: "西班牙",
-  IT: "意大利",
-  NL: "荷兰",
-  PT: "葡萄牙",
-  PL: "波兰",
-  SE: "瑞典",
-  NO: "挪威",
-  DK: "丹麦",
-  BR: "巴西",
-  MX: "墨西哥",
-  IN: "印度",
-  JP: "日本",
-  KR: "韩国",
-  SG: "新加坡",
-  HK: "中国香港",
-  TW: "中国台湾",
-  ZA: "南非",
-};
-
-export function formatCountryLabel(code: WebSearchCountryCode): string {
-  return COUNTRY_LABELS[code];
 }
 
 const NUMBER_FORMATTER = new Intl.NumberFormat("en-US");

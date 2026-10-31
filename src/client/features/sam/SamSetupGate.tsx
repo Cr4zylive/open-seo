@@ -1,5 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { ShieldAlert, Wrench } from "lucide-react";
+import { GateCard } from "@/client/components/GateCard";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
+import { isEveryAppClientAuthMode } from "@/lib/auth-mode";
 
 export function SamSetupGate({
   errorMessage,
@@ -11,57 +15,69 @@ export function SamSetupGate({
   onRetry: () => void;
 }) {
   return (
-    <section>
-      <div className="rounded-2xl border border-base-300 bg-base-100 p-6 md:p-7 space-y-5">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-warning/15 p-2.5 text-warning shrink-0">
-            <Wrench className="size-5" />
-          </div>
-          <div className="max-w-3xl space-y-1.5">
-            <h2 className="text-xl font-semibold">启用 AI 功能</h2>
-            <div className="text-sm text-base-content/68">
-              OpenSEO 内置 AI 智能体 SAM 需要 OpenRouter API 密钥。请在
-              OpenRouter 创建密钥，将其设置为 <code>OPENROUTER_API_KEY</code>{" "}
-              环境变量，重启 OpenSEO 后在此确认。
-            </div>
-            <div className="text-xs text-base-content/50">
-              各类部署方式的操作步骤请查看{" "}
-              <Link
-                className="underline underline-offset-2 hover:text-base-content/70"
-                to="/help/openrouter-api-key"
-              >
-                OpenRouter API 密钥设置指南
-              </Link>
-              .
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            className="btn btn-primary"
-            onClick={onRetry}
-            disabled={isRefetching}
+    <GateCard
+      icon={Wrench}
+      tone="warning"
+      title="启用 AI 功能"
+      description={
+        <>
+          {isEveryAppClientAuthMode() ? (
+            <p>
+              SAM 是 OpenSEO 的应用内 AI 智能体，通过你的 Every App
+              网关使用 OpenRouter。管理员在 OpenRouter 创建密钥后，用{" "}
+              <code>pnpm everyapp secret set OPENROUTER_API_KEY</code>{" "}
+              设置到网关，然后在这里确认。
+            </p>
+          ) : (
+            <p>
+              SAM 是 OpenSEO 的应用内 AI 智能体，需要 OpenRouter API 密钥。在
+              OpenRouter 创建密钥，设为{" "}
+              <code>OPENROUTER_API_KEY</code>{" "}
+              环境变量，重启 OpenSEO，然后在这里确认。
+            </p>
+          )}
+          <p className="text-xs">
+            各部署方式的分步说明见{" "}
+            <Link
+              className="underline underline-offset-2 hover:text-foreground"
+              to="/help/openrouter-api-key"
+            >
+              OpenRouter API 密钥设置指南
+            </Link>
+            。
+          </p>
+        </>
+      }
+      actions={
+        <>
+          <Button size="lg" pending={isRefetching} onClick={onRetry}>
+            确认 API 密钥
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            nativeButton={false}
+            render={
+              <a
+                href="https://openrouter.ai/settings/keys"
+                target="_blank"
+                rel="noreferrer"
+              />
+            }
           >
-            {isRefetching ? "正在确认…" : "确认 API 密钥"}
-          </button>
-          <a
-            className="btn"
-            href="https://openrouter.ai/settings/keys"
-            target="_blank"
-            rel="noreferrer"
-          >
-            打开 OpenRouter 密钥页面
-          </a>
-        </div>
-
-        {errorMessage ? (
-          <div className="alert alert-warning">
-            <ShieldAlert className="size-4 shrink-0" />
-            <span>{errorMessage}</span>
-          </div>
-        ) : null}
-      </div>
-    </section>
+            打开 OpenRouter 密钥
+          </Button>
+        </>
+      }
+    >
+      {errorMessage ? (
+        <Alert variant="warning">
+          <ShieldAlert />
+          <AlertDescription className="text-foreground">
+            {errorMessage}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+    </GateCard>
   );
 }

@@ -1,6 +1,14 @@
-import { Outlet, createFileRoute } from "@tanstack/react-router";
-import { AuthPageShell } from "@/client/features/auth/AuthPage";
+import {
+  Link,
+  Outlet,
+  createFileRoute,
+  useMatch,
+} from "@tanstack/react-router";
+import { AuthPageCard, AuthPageShell } from "@/client/features/auth/AuthPage";
 import { useHostedAuthRouteGuard } from "@/client/features/auth/useHostedAuthRouteGuard";
+import { PageLoading } from "@/client/components/Spinner";
+import { Button } from "@/client/components/ui/button";
+import { usesBetterAuthClient } from "@/lib/auth-mode";
 
 export const Route = createFileRoute("/_authenticated")({
   component: AuthenticatedShellLayout,
@@ -8,9 +16,37 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedShellLayout() {
   const authGate = useHostedAuthRouteGuard();
+  const isOAuthConsent = Boolean(
+    useMatch({ from: "/_authenticated/oauth-consent", shouldThrow: false }),
+  );
 
-  if (!authGate.isHostedMode || !authGate.canRenderAuthenticatedContent) {
-    return null;
+  // MCP consent works wherever the app has its own accounts (hosted and
+  // password self-hosts); every other page under this layout is hosted-only.
+  const isAvailable = isOAuthConsent
+    ? usesBetterAuthClient()
+    : authGate.isHostedMode;
+  if (!isAvailable) {
+    return (
+      <AuthPageShell>
+        <AuthPageCard
+          title="不可用"
+          helperText="此页面暂时不可用。"
+        >
+          <Button
+            nativeButton={false}
+            render={<Link to="/" />}
+            variant="secondary"
+            className="w-full"
+          >
+            返回 OpenSEO
+          </Button>
+        </AuthPageCard>
+      </AuthPageShell>
+    );
+  }
+
+  if (!authGate.canRenderAuthenticatedContent) {
+    return <PageLoading />;
   }
 
   return (

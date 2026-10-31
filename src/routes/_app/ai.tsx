@@ -1,359 +1,333 @@
-import { AgentSetup } from "@/client/features/ai-mcp/AgentSetup";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowUpRight, ShieldAlert } from "lucide-react";
-import { getAuthMode, isHostedClientAuthMode } from "@/lib/auth-mode";
-import { captureClientEvent } from "@/client/lib/posthog";
-import { ClaudeIcon, CodexIcon } from "@/client/features/ai-mcp/AgentIcons";
-import { AvailableTools } from "@/client/features/ai-mcp/AvailableTools";
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { everyAppAccountQueryOptions } from "@/client/features/every-app/everyAppAccountQueries";
+import { z } from "zod";
 import {
-  CodeBlock,
-  Collapsible,
-  CopyButton,
-} from "@/client/features/ai-mcp/SetupControls";
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/client/components/ui/tabs";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/client/components/ui/card";
+import { PageHeader } from "@/client/components/PageHeader";
+import { ArrowUpRight, ShieldAlert } from "lucide-react";
+import { getClientAuthMode } from "@/lib/auth-mode";
+import { captureClientEvent } from "@/client/lib/posthog";
+import {
+  agentUpdatePrompt,
+  getAgentSetupPrompt,
+} from "@/client/features/ai-mcp/agentSetupPrompt";
+import { CopyButton } from "@/client/components/CopyButton";
+import { AgentList } from "@/client/features/ai-mcp/AgentList";
 
-const DISCORD_URL = "https://discord.gg/c9uGs3cFXr";
-const SUPPORT_EMAIL = "ben@openseo.so";
-const SAM_GITHUB_URL = "https://github.com/every-app/sam";
-const SKILL_NAMES = [
-  "seo-project-setup",
-  "seo-coach",
-  "keyword-research",
-  "keyword-clustering",
-  "competitive-landscape",
-  "competitor-analysis",
-  "link-prospecting",
-  "local-seo",
-  "seo-audit",
+const DOCS_URL = "https://openseo.so/docs/agent-setup";
+
+const COACH_DOCS_URL = "https://openseo.so/docs/skills/seo-coach";
+const LINK_CLASS =
+  "text-foreground underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground";
+const MUTED_LINK_CLASS =
+  "inline-flex items-center gap-1 text-sm text-muted-foreground underline decoration-foreground/25 underline-offset-4 hover:text-foreground";
+const SKILLS = [
+  ["seo-coach", "说明你现在的位置，并选出下一步。"],
+  [
+    "seo-project-setup",
+    "把目标、竞争对手和关键页面存为共享上下文。",
+  ],
+  [
+    "seo-audit",
+    "一页纸网站审计，围绕本周要做的一件事。",
+  ],
+  [
+    "ai-visibility-audit",
+    "找出最可能让你出现在 AI 回答里的几处改动。",
+  ],
+  [
+    "ai-prompt-research",
+    "找出人们在 ChatGPT 里怎么问你的市场，以及谁被引用。",
+  ],
+  ["keyword-research", "从几个种子主题找出关键词机会。"],
+  ["keyword-clustering", "按意图聚类关键词，并映射到页面。"],
+  ["competitive-landscape", "画出谁在你的市场里赢，以及为什么。"],
+  [
+    "competitor-analysis",
+    "研究一个竞争对手的关键词、内容和反向链接。",
+  ],
+  ["link-prospecting", "找外链机会并起草外联邮件。"],
+  ["local-seo", "审计 Google 商家资料和地图可见度。"],
+  ["seo-report", "把以上任何一项存为报告页上的报告。"],
 ];
-const SKILLS_INSTALL = `npx skills add every-app/open-seo`;
-const ALL_SKILLS_INSTALL = `npx skills add every-app/open-seo --skill '*'`;
-const CLAUDE_CODE_SKILLS_INSTALL = `npx skills add every-app/open-seo --skill '*' --agent claude-code`;
-const CODEX_SKILLS_INSTALL = `npx skills add every-app/open-seo --skill '*' --agent codex`;
-const SKILLS_MANUAL_INSTALL = `git clone https://github.com/every-app/open-seo.git
 
-# Codex
-mkdir -p ~/.codex/skills
-cp -R open-seo/plugins/openseo/skills/* ~/.codex/skills/
-
-# Claude Code
-mkdir -p ~/.claude/skills
-cp -R open-seo/plugins/openseo/skills/* ~/.claude/skills/`;
+const aiSearchSchema = z.object({
+  // Active tab. Omitted for the default "setup" tab.
+  tab: z.enum(["skills"]).optional().catch(undefined),
+});
 
 export const Route = createFileRoute("/_app/ai")({
+  validateSearch: aiSearchSchema,
   component: AiPage,
 });
 
+const everyApp = getClientAuthMode() === "everyapp";
+
 function AiPage() {
-  const mcpUrl =
-    typeof window === "undefined"
-      ? "https://app.openseo.so/mcp"
-      : `${window.location.origin}/mcp`;
+  const { tab = "setup" } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const origin = window.location.origin;
+  const mcpUrl = `${origin}/mcp`;
+  const prompt = getAgentSetupPrompt(origin);
 
   return (
-    <div className="h-full overflow-auto bg-base-100 px-4 py-12 md:px-6 md:py-16 pb-24 md:pb-12">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl font-semibold">AI 与 MCP</h1>
-        <p className="mt-2 text-sm text-base-content/70 leading-relaxed">
-          将 AI 智能体连接到 OpenSEO，即可从编辑器或对话中执行关键词研究、SERP
-          分析、域名查询和反向链接检查。
-        </p>
+    <div className="h-full overflow-auto px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-8">
+      <div className="mx-auto max-w-7xl">
+        <PageHeader
+          title="智能体设置"
+          description="用 OpenSEO 最有效的方式，是通过你已经在用的 AI 智能体。设置一次，然后随便问。"
+        />
 
-        <section className="mt-8 rounded-xl border border-base-300 p-5">
-          <AgentSetup />
-        </section>
+        <Tabs
+          value={tab}
+          onValueChange={(value) =>
+            void navigate({
+              search: { tab: value === "skills" ? "skills" : undefined },
+              replace: true,
+            })
+          }
+          className="mt-8"
+        >
+          <TabsList variant="line">
+            <TabsTrigger value="setup">设置智能体</TabsTrigger>
+            <TabsTrigger value="skills">技能</TabsTrigger>
+          </TabsList>
+          <TabsContent value="setup">
+            {everyApp ? (
+              <EveryAppAgentSetup />
+            ) : (
+              <>
+                <div className="mt-6 space-y-5">
+                  <Card size="lg">
+                    <CardHeader>
+                      <CardTitle>
+                        <h2>设置智能体</h2>
+                      </CardTitle>
+                      <CardDescription>
+                        把配置提示词粘贴到智能体里，即可连接 OpenSEO
+                        并安装 SEO 技能。如有需要手动完成的步骤，它会引导你。
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <AgentList />
+                      <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3">
+                        <CopyButton
+                          variant="default"
+                          size="lg"
+                          value={prompt}
+                          label="复制配置提示词"
+                          successMessage="已复制配置提示词"
+                          onCopy={() =>
+                            captureClientEvent("mcp:setup_prompt_copy")
+                          }
+                        />
+                        <a
+                          href={`${DOCS_URL}#set-up-your-agent`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={MUTED_LINK_CLASS}
+                        >
+                          设置说明
+                          <ArrowUpRight className="size-3.5" />
+                        </a>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="text-muted-foreground">
+                      <p>
+                        连接后，让智能体使用{" "}
+                        <a
+                          href={COACH_DOCS_URL}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={LINK_CLASS}
+                        >
+                          SEO Coach
+                        </a>{" "}
+                        帮你决定下一步做什么。
+                      </p>
+                    </CardFooter>
+                  </Card>
 
-        {getAuthMode(import.meta.env.AUTH_MODE) === "cloudflare_access" ? (
-          <div className="alert alert-warning mt-6 text-sm" role="alert">
-            <ShieldAlert className="size-4 shrink-0" />
-            <span>
-              此实例位于 Cloudflare Access 之后。请先在 Access 应用中启用
-              Managed OAuth，MCP 客户端才能连接。{" "}
-              <a
-                href="https://openseo.so/docs/self-hosting/cloudflare#connect-the-mcp-server-through-cloudflare-access"
-                target="_blank"
-                rel="noreferrer"
-                className="link font-medium"
-              >
-                设置指南
-              </a>
-            </span>
-          </div>
-        ) : null}
+                  <Card size="lg">
+                    <CardHeader>
+                      <CardTitle>
+                        <h2>更新技能</h2>
+                      </CardTitle>
+                      <CardDescription>
+                        已经连上了？把更新提示词粘贴到智能体里，即可拿到最新
+                        OpenSEO 技能，并保留连接设置和个人修改。
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-3">
+                      <CopyButton
+                        variant="default"
+                        size="lg"
+                        value={agentUpdatePrompt}
+                        label="复制更新提示词"
+                        successMessage="已复制更新提示词"
+                        onCopy={() =>
+                          captureClientEvent("mcp:update_prompt_copy")
+                        }
+                      />
+                      <a
+                        href={`${DOCS_URL}#update-your-skills`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={MUTED_LINK_CLASS}
+                      >
+                        更新说明
+                        <ArrowUpRight className="size-3.5" />
+                      </a>
+                    </CardContent>
+                  </Card>
+                </div>
 
-        <section className="mt-8">
-          <div className="rounded-lg border border-base-300 bg-base-200 px-4 py-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-base-content/50">
-                MCP 服务器网址
-              </p>
-              <CopyButton
-                value={mcpUrl}
-                successMessage="MCP 网址已复制"
-                onCopy={() => captureClientEvent("mcp:setup_url_copy")}
-              />
-            </div>
-            <code className="mt-2 block break-all font-mono text-sm text-base-content">
-              {mcpUrl}
-            </code>
-          </div>
-          <p className="mt-2.5 text-xs text-base-content/55 leading-relaxed">
-            将此网址粘贴到任意 MCP 客户端。它会指向您当前使用的 OpenSEO
-            实例，包括托管、自托管或本地实例。出现提示时请登录 OpenSEO。
-          </p>
-          {isHostedClientAuthMode() ? (
-            <p className="mt-2 text-xs text-base-content/55">
-              对于无界面环境或 CI，请使用以下位置创建的 API 密钥：{" "}
-              <Link className="link link-primary" to="/settings">
-                设置
-              </Link>{" "}
-              ，以替代 OAuth 登录。
-            </p>
-          ) : null}
-        </section>
+                {getClientAuthMode() === "cloudflare_access" ? (
+                  <Alert variant="warning" className="mt-8">
+                    <ShieldAlert />
+                    <AlertDescription>
+                      此实例位于 Cloudflare Access 之后。在 Access
+                      应用上启用 Managed OAuth 之前，MCP 客户端无法连接。{" "}
+                      <a
+                        href="https://openseo.so/docs/self-hosting/cloudflare#connect-the-mcp-server-through-cloudflare-access"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium"
+                      >
+                        设置指南
+                      </a>
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
 
-        <section className="mt-10">
-          <h2 className="text-base font-semibold">设置指南</h2>
-          <p className="mt-1.5 text-sm text-base-content/70">
-            选择您的智能体。
-          </p>
-          <div className="mt-4 divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300 bg-base-200">
-            <Collapsible
-              id="claude-code"
-              title="Claude Code"
-              subtitle="通过命令行添加"
-              icon={<ClaudeIcon className="size-5" />}
-            >
-              <p className="text-sm text-base-content/70">在终端中运行：</p>
-              <CodeBlock
-                code={`claude mcp add --transport http --scope user openseo ${mcpUrl}`}
-                onCopy={() =>
-                  captureClientEvent("mcp:setup_command_copy", {
-                    agent: "claude-code",
-                  })
-                }
-              />
-              <p className="text-sm text-base-content/70">
-                出现提示时批准登录。
-              </p>
-            </Collapsible>
-
-            <Collapsible
-              id="claude-desktop"
-              title="Claude Desktop"
-              subtitle="添加自定义连接器"
-              icon={<ClaudeIcon className="size-5" />}
-            >
-              <ol className="ml-5 list-decimal space-y-1.5 text-sm text-base-content/70 leading-relaxed">
-                <li>
-                  打开 <span className="text-base-content">自定义</span> →{" "}
-                  <span className="text-base-content">连接器</span>。
-                </li>
-                <li>
-                  点击 <span className="text-base-content">添加</span>（或 +），然后选择{" "}
-                  <span className="font-medium text-base-content">
-                    添加自定义连接器
+                <div className="mt-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border pt-5 text-xs text-muted-foreground">
+                  <span>
+                    此实例的 MCP 服务器网址：{" "}
+                    <code className="font-mono text-foreground/80">
+                      {mcpUrl}
+                    </code>
                   </span>
-                  。
-                </li>
-                <li>粘贴上方 MCP 网址，然后点击“添加”。</li>
-                <li>出现提示时批准 OpenSEO 登录。</li>
-                <li>
-                  可选：OpenSEO 连接成功后，点击{" "}
-                  <span className="font-medium text-base-content">配置</span>
-                  ，然后选择{" "}
-                  <span className="font-medium text-base-content">
-                    始终允许
-                  </span>
-                  。需要 Claude 每次询问后才能使用的工具可保持原设置。
-                </li>
-              </ol>
-              <p className="text-xs text-base-content/55 leading-relaxed">
-                适用于 Claude 免费版、Pro、Max、Team 和 Enterprise。免费版支持一个自定义连接器。
+                  <CopyButton
+                    value={mcpUrl}
+                    successMessage="MCP 网址已复制"
+                    onCopy={() => captureClientEvent("mcp:setup_url_copy")}
+                  />
+                </div>
+              </>
+            )}
+          </TabsContent>
+          <TabsContent value="skills">
+            <section className="mt-6">
+              <p className="text-sm text-muted-foreground">
+                {everyApp
+                  ? "用 npx skills add every-app/open-seo 安装。"
+                  : "配置提示词会安装这些技能。"}{" "}
+                需要完整报告而不是快速回答时，按名称运行其中一个。
               </p>
-            </Collapsible>
-
-            <Collapsible
-              id="codex"
-              title="Codex"
-              subtitle="通过命令行添加"
-              icon={<CodexIcon className="size-5" />}
-            >
-              <p className="text-sm text-base-content/70">在终端中运行：</p>
-              <CodeBlock
-                code={`codex mcp add openseo --url ${mcpUrl}`}
-                onCopy={() =>
-                  captureClientEvent("mcp:setup_command_copy", {
-                    agent: "codex",
-                  })
-                }
-              />
-              <p className="text-sm text-base-content/70">
-                出现提示时批准登录。
-              </p>
-            </Collapsible>
-
-            <Collapsible
-              id="codex-desktop"
-              title="Codex Desktop"
-              subtitle="设置 → 集成与 MCP"
-              icon={<CodexIcon className="size-5" />}
-            >
-              <ol className="ml-5 list-decimal space-y-1.5 text-sm text-base-content/70 leading-relaxed">
-                <li>
-                  打开{" "}
-                  <span className="text-base-content">
-                    设置（Settings）→ 集成与 MCP（Integrations & MCP）
-                  </span>
-                  。
-                </li>
-                <li>
-                  点击{" "}
-                  <span className="font-medium text-base-content">
-                    添加自己的连接
-                  </span>
-                  .
-                </li>
-                <li>粘贴上方 MCP 网址。</li>
-                <li>出现提示时批准 OpenSEO 登录。</li>
-              </ol>
-            </Collapsible>
-          </div>
-        </section>
-
-        <section className="mt-12">
-          <h2 className="text-base font-semibold">OpenSEO 技能</h2>
-          <p className="mt-1.5 text-sm text-base-content/70 leading-relaxed">
-            技能为 Codex 和 Claude Code 提供可复用的 SEO 工作流，并可在需要实时
-            SERP、关键词、反向链接或域名数据时调用 OpenSEO MCP 工具。
-          </p>
-          <div className="mt-4 divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300 bg-base-200">
-            <Collapsible
-              id="skills-add"
-              title="使用 skills add 安装"
-              subtitle="推荐的跨智能体安装方式"
-            >
-              <CodeBlock code={SKILLS_INSTALL} />
-              <p className="text-sm text-base-content/70">
-                也可以自动接受每个 OpenSEO 技能：
-              </p>
-              <CodeBlock code={ALL_SKILLS_INSTALL} />
-            </Collapsible>
-            <Collapsible
-              id="claude-code-skills"
-              title="为 Claude Code 安装"
-              subtitle="仅安装到 Claude Code"
-              icon={<ClaudeIcon className="size-5" />}
-            >
-              <CodeBlock code={CLAUDE_CODE_SKILLS_INSTALL} />
-            </Collapsible>
-            <Collapsible
-              id="codex-skills"
-              title="为 Codex 安装"
-              subtitle="仅安装到 OpenAI Codex"
-              icon={<CodexIcon className="size-5" />}
-            >
-              <CodeBlock code={CODEX_SKILLS_INSTALL} />
-            </Collapsible>
-            <Collapsible
-              id="manual-skills"
-              title="从 GitHub 手动安装"
-              subtitle="克隆仓库并复制技能目录"
-            >
-              <CodeBlock code={SKILLS_MANUAL_INSTALL} />
-            </Collapsible>
-          </div>
-          <div className="mt-5">
-            <p className="text-sm text-base-content/70 leading-relaxed">
-              从这里开始{" "}
-              <span className="font-mono text-base-content">
-                /seo-project-setup
-              </span>
-              。它会询问您的项目信息，并把目标、定位和竞争对手保存到项目上下文。
-            </p>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-base-content/50">
-              可用技能
-            </p>
-            <ul className="mt-2 grid gap-1.5 text-sm text-base-content/70 sm:grid-cols-2">
-              {SKILL_NAMES.map((skill) => (
-                <li key={skill} className="flex gap-2">
-                  <span className="text-base-content/35">-</span>
-                  <span>{skill}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-
-        <section className="mt-12">
-          <h2 className="text-base font-semibold">可用工具</h2>
-          <div className="mt-5">
-            <AvailableTools />
-          </div>
-        </section>
-
-        <section className="mt-12">
-          <h2 className="text-base font-semibold">Sam：AI SEO 队友</h2>
-          <p className="mt-1.5 text-sm text-base-content/70 leading-relaxed">
-            Sam 是面向 Claude Code
-            和其他编程智能体的实验性内容工作流，整合了关键词研究、来源发现、内容起草和质量检查。
-          </p>
-          <a
-            href={SAM_GITHUB_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-base-content transition-colors hover:text-base-content/60"
-          >
-            在 GitHub 查看 Sam
-            <ArrowUpRight className="size-3.5" />
-          </a>
-        </section>
-
-        <section className="mt-12">
-          <h2 className="text-base font-semibold">路线图</h2>
-          <ul className="mt-4 space-y-3">
-            {[
-              {
-                title: "应用内 SEO 研究智能体",
-                description: "无需离开 OpenSEO 即可提问和开展研究",
-              },
-              {
-                title: "内容助手",
-                description: "使用已保存关键词和业务背景生成草稿",
-              },
-            ].map((item) => (
-              <li key={item.title} className="flex gap-2.5 text-sm">
-                <span className="mt-[2px] shrink-0 text-base-content/40">
-                  ·
-                </span>
-                <span className="text-base-content/70">
-                  <span className="font-medium text-base-content">
-                    {item.title}
-                  </span>
-                  <br />
-                  {item.description}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        <p className="mt-12 text-xs text-base-content/55 leading-relaxed">
-          欢迎通过以下方式反馈：{" "}
-          <a
-            className="link link-primary"
-            href={DISCORD_URL}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Discord
-          </a>{" "}
-          或发送邮件{" "}
-          <a className="link link-primary" href={`mailto:${SUPPORT_EMAIL}`}>
-            {SUPPORT_EMAIL}
-          </a>
-          。
-        </p>
+              <ul className="mt-5 space-y-3 text-sm sm:space-y-2">
+                {SKILLS.map(([name, blurb]) => (
+                  <li
+                    key={name}
+                    className="flex flex-col gap-0.5 sm:flex-row sm:gap-3"
+                  >
+                    <a
+                      href={`https://openseo.so/docs/skills/${name}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`shrink-0 font-mono text-[13px] sm:w-48 ${LINK_CLASS}`}
+                    >
+                      /{name}
+                    </a>
+                    <span className="text-muted-foreground">{blurb}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </TabsContent>
+        </Tabs>
       </div>
+    </div>
+  );
+}
+
+const EVERY_APP_SKILLS_COMMAND = "npx skills add every-app/open-seo";
+
+/**
+ * Behind Every App the agent connects to the gateway's MCP address, which
+ * covers every app on it; OpenSEO serves no MCP of its own here. The skills
+ * install on their own.
+ */
+function EveryAppAgentSetup() {
+  const gatewayUrl = useQuery(everyAppAccountQueryOptions()).data?.gatewayUrl;
+  return (
+    <div className="mt-6 space-y-5">
+      <Card size="lg">
+        <CardHeader>
+          <CardTitle>
+            <h2>把智能体连到 Every App</h2>
+          </CardTitle>
+          <CardDescription>
+            Every App 给智能体一个地址，覆盖 OpenSEO
+            和其他应用。连接一次即可。
+          </CardDescription>
+        </CardHeader>
+        {gatewayUrl ? (
+          <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <code className="font-mono text-sm">{gatewayUrl}/mcp</code>
+            <CopyButton
+              value={`${gatewayUrl}/mcp`}
+              successMessage="MCP 网址已复制"
+            />
+          </CardContent>
+        ) : null}
+      </Card>
+
+      <Card size="lg">
+        <CardHeader>
+          <CardTitle>
+            <h2>安装 SEO 技能</h2>
+          </CardTitle>
+          <CardDescription>
+            在终端运行此命令，把 OpenSEO 的技能加到智能体。它们通过
+            Every App 连接使用 OpenSEO。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <code className="font-mono text-sm">{EVERY_APP_SKILLS_COMMAND}</code>
+          <CopyButton
+            value={EVERY_APP_SKILLS_COMMAND}
+            successMessage="命令已复制"
+          />
+        </CardContent>
+        <CardFooter className="text-muted-foreground">
+          <p>
+            连接后，让智能体使用{" "}
+            <a
+              href={COACH_DOCS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className={LINK_CLASS}
+            >
+              SEO Coach
+            </a>{" "}
+            帮你决定下一步做什么。
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

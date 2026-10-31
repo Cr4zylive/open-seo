@@ -1,3 +1,9 @@
+import { useId } from "react";
+import { Link, Link2, Unlink } from "lucide-react";
+import { SegmentedToggle } from "@/client/components/SegmentedToggle";
+import { DataTableFilterGroup } from "@/client/components/table/DataTableToolbar";
+import { Checkbox } from "@/client/components/ui/checkbox";
+import { Label } from "@/client/components/ui/label";
 import { DomainFilterPanel } from "@/client/features/domain/components/DomainFilterPanel";
 import type { BacklinksTab } from "@/types/schemas/backlinks";
 import {
@@ -32,7 +38,6 @@ export function BacklinksFilterPanel({
     return (
       <DomainFilterPanel
         key="backlinks"
-        debugName="BacklinksFilterPanel"
         appliedFilters={state.values}
         fields={BACKLINKS_FILTER_FIELDS}
         activeFilterCount={state.activeFilterCount}
@@ -88,7 +93,6 @@ export function BacklinksFilterPanel({
     return (
       <DomainFilterPanel
         key="domains"
-        debugName="ReferringDomainsFilterPanel"
         appliedFilters={state.values}
         fields={REFERRING_DOMAINS_FILTER_FIELDS}
         activeFilterCount={state.activeFilterCount}
@@ -112,7 +116,7 @@ export function BacklinksFilterPanel({
             minKey: "minBacklinks",
             maxKey: "maxBacklinks",
           },
-          { title: "权威度", minKey: "minRank", maxKey: "maxRank" },
+          { title: "排名", minKey: "minRank", maxKey: "maxRank" },
           {
             title: "垃圾链接分数",
             minKey: "minSpamScore",
@@ -136,7 +140,6 @@ export function BacklinksFilterPanel({
   return (
     <DomainFilterPanel
       key="pages"
-      debugName="TopPagesFilterPanel"
       appliedFilters={state.values}
       fields={TOP_PAGES_FILTER_FIELDS}
       activeFilterCount={state.activeFilterCount}
@@ -161,7 +164,7 @@ export function BacklinksFilterPanel({
           minKey: "minReferringDomains",
           maxKey: "maxReferringDomains",
         },
-        { title: "权威度", minKey: "minRank", maxKey: "maxRank" },
+        { title: "排名", minKey: "minRank", maxKey: "maxRank" },
       ]}
       onApply={(values) => {
         state.apply(values);
@@ -175,6 +178,12 @@ export function BacklinksFilterPanel({
   );
 }
 
+const LINK_TYPE_ITEMS = [
+  { value: "all", icon: <Link2 />, label: "全部" },
+  { value: "dofollow", icon: <Link />, label: "Dofollow" },
+  { value: "nofollow", icon: <Unlink />, label: "Nofollow" },
+];
+
 function BacklinksToggleControls({
   draft,
   setValue,
@@ -183,58 +192,56 @@ function BacklinksToggleControls({
   setValue: (key: keyof BacklinksTabFilterValues, value: string) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-4">
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-base-content/60">
-          链接类型
-        </p>
-        <div className="flex items-center gap-1">
-          {(["", "dofollow", "nofollow"] as const).map((value) => (
-            <button
-              key={value || "all"}
-              type="button"
-              className={`btn btn-xs ${draft.linkType === value ? "btn-soft" : "btn-ghost"}`}
-              onClick={() => setValue("linkType", value)}
-            >
-              {value === ""
-                ? "全部"
-                : value === "dofollow"
-                  ? "Dofollow"
-                  : "Nofollow"}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <DataTableFilterGroup label="链接类型">
+        <SegmentedToggle
+          showLabels
+          items={LINK_TYPE_ITEMS}
+          value={draft.linkType || "all"}
+          onChange={(value) =>
+            setValue("linkType", value === "all" ? "" : value)
+          }
+        />
+      </DataTableFilterGroup>
 
-      <div className="space-y-1.5">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-base-content/60">
-          显示设置
-        </p>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-xs"
-              checked={draft.hideLost === "true"}
-              onChange={(event) =>
-                setValue("hideLost", event.target.checked ? "true" : "")
-              }
-            />
-            <span className="text-xs">隐藏已丢失链接</span>
-          </label>
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              className="checkbox checkbox-xs"
-              checked={draft.hideBroken === "true"}
-              onChange={(event) =>
-                setValue("hideBroken", event.target.checked ? "true" : "")
-              }
-            />
-            <span className="text-xs">隐藏失效链接</span>
-          </label>
+      <DataTableFilterGroup label="可见性">
+        <div className="flex h-7 items-center gap-4">
+          <VisibilityCheckbox
+            label="隐藏已丢失"
+            checked={draft.hideLost === "true"}
+            onCheckedChange={(checked) =>
+              setValue("hideLost", checked ? "true" : "")
+            }
+          />
+          <VisibilityCheckbox
+            label="隐藏失效"
+            checked={draft.hideBroken === "true"}
+            onCheckedChange={(checked) =>
+              setValue("hideBroken", checked ? "true" : "")
+            }
+          />
         </div>
-      </div>
+      </DataTableFilterGroup>
+    </div>
+  );
+}
+
+function VisibilityCheckbox({
+  label,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  const id = useId();
+  return (
+    <div className="flex items-center gap-2">
+      <Checkbox id={id} checked={checked} onCheckedChange={onCheckedChange} />
+      <Label htmlFor={id} className="text-xs font-normal">
+        {label}
+      </Label>
     </div>
   );
 }

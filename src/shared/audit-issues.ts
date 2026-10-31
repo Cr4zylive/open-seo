@@ -6,6 +6,9 @@
  * of these types by id.
  */
 
+// Relative: tests/badseo type-checks this file without the @ alias.
+import { RENDERED_CRAWL_TIME_LIMIT_HOURS } from "./audit-limits";
+
 export type IssueSeverity = "critical" | "warning" | "info";
 
 interface AuditIssueDescriptor {
@@ -22,23 +25,46 @@ export const AUDIT_ISSUE_TYPES = {
     explanation:
       "网站返回了机器人验证或拒绝访问响应，例如 Cloudflare 验证或 403，未返回正常页面。因此该页面无法审计，搜索引擎等其他爬虫也可能遇到类似阻碍。",
     howToFix:
-      "如果您拥有此网站，请在 WAF 或机器人防护设置中将“OpenSEO-Audit”用户代理加入允许名单。使用 Cloudflare 时，可创建 WAF 自定义规则，在用户代理包含“OpenSEO-Audit”时跳过机器人防护；部分免费方案可能需要适当放宽防护。完成后重新运行审计。",
+      '如果你是站点所有者，请在 WAF/机器人防护中将 "OpenSEO-Audit" 用户代理加入白名单（Cloudflare：创建自定义 WAF 规则，当用户代理包含 "OpenSEO-Audit" 时跳过机器人防护；部分免费套餐可能需要放宽机器人防护）。然后重新运行审计。Shopify 请改用爬虫访问（在线商店 → 偏好设置 → 爬虫访问），并将签名粘贴到 OpenSEO 的「设置 → 爬虫访问」。如何放行并验证爬虫：https://openseo.so/docs/crawler',
+  },
+  "javascript-rendering-suspected": {
+    severity: "warning",
+    title: "内容可能需要 JavaScript",
+    explanation:
+      "页面 HTML 主要是一个 JavaScript 应用容器，可读内容很少，也没有标题、链接或图片。内容可能在浏览器中加载，或渲染时仍在加载。由于这份 HTML 可能不代表完整页面，内容检查已跳过。",
+    howToFix:
+      '如果本次审计未渲染 JavaScript，请启用「渲染 JavaScript」后重新审计，以检查加载后的内容。为了稳定抓取，请通过服务端渲染或预渲染，在初始 HTML 中提供重要内容和导航。此警告并不代表搜索引擎无法索引该页面。',
   },
   "rate-limited-page": {
     severity: "warning",
     title: "触发限流（429）",
     explanation:
-      "服务器返回了 429 Too Many Requests，因此无法审计此页面。如果网站要求的冷却时间仍在审计时限内，爬虫会等待后再重试。",
+      "服务器返回了 429 Too Many Requests，因此无法审计此页面。爬虫已按 Retry-After 等待，并重试一次后继续。",
     howToFix:
-      '请提高爬虫的速率限制，或在限流规则中将“OpenSEO-Audit”用户代理加入允许名单（Cloudflare：添加匹配该用户代理的限流例外）。然后重新运行审计。如果限制很严，也可以用更少页面再跑一次。',
+      '请提高爬虫速率限制，或在限流规则中将 "OpenSEO-Audit" 用户代理加入白名单（Cloudflare：添加匹配该用户代理的限流例外）。然后重新运行审计。如果限制较严，减少页面数量再运行也有帮助。Shopify 请改用爬虫访问（在线商店 → 偏好设置 → 爬虫访问），并将签名粘贴到 OpenSEO 的「设置 → 爬虫访问」。如何放行并验证爬虫：https://openseo.so/docs/crawler',
   },
   "crawl-rate-limited": {
     severity: "warning",
     title: "抓取因限流提前停止",
     explanation:
-      "网站要求的等待时间超过了本次审计允许的时限，我们已停止继续请求页面。本报告不完整；未抓取的网址不会被记为失效或限流。",
+      "网站连续多页返回 429 Too Many Requests，或让爬虫等待过久，因此我们停止了请求。此报告不完整；未抓取的网址不会记为失效或限流。",
     howToFix:
-      "等网站限流重置后再重新运行审计，或请站点管理员允许 OpenSEO-Audit 爬虫。",
+      "请等站点限流恢复后重新审计，或请站点所有者放行 OpenSEO-Audit 爬虫（https://openseo.so/docs/crawler）。Shopify 请改用爬虫访问（在线商店 → 偏好设置 → 爬虫访问），并将签名粘贴到 OpenSEO 的「设置 → 爬虫访问」。",
+  },
+  "crawl-time-limit": {
+    severity: "warning",
+    title: "抓取因时间限制提前停止",
+    explanation: `启用 JavaScript 渲染的审计会在 ${RENDERED_CRAWL_TIME_LIMIT_HOURS} 小时后停止抓取，本次已达到该限制。此报告不完整；未抓取的网址不会记为失效。`,
+    howToFix:
+      "请降低页面上限后重新审计；如果站点内容和链接已在 HTML 中，也可以关闭「渲染 JavaScript」。仅对实际渲染的页面计费。",
+  },
+  "crawl-credits-exhausted": {
+    severity: "warning",
+    title: "抓取因费用上限提前停止",
+    explanation:
+      "本站点许多页面需要高级渲染器，审计已达到费用上限并停止。仅对已渲染的页面计费。",
+    howToFix:
+      "如果站点无需 JavaScript 即可展示内容，请关闭「渲染 JavaScript」后重新运行。",
   },
   "server-error": {
     severity: "critical",
@@ -109,7 +135,8 @@ export const AUDIT_ISSUE_TYPES = {
     title: "缺少 H1 标题",
     explanation:
       "页面缺少 H1。H1 用于向用户和搜索引擎说明页面主题，缺少 H1 会降低主题清晰度。",
-    howToFix: "添加一个说明页面核心主题的 H1，并与标题标签保持一致。",
+    howToFix:
+      "添加一个说明页面核心主题的 H1，并与标题标签保持一致。",
   },
   "multiple-h1": {
     severity: "warning",
@@ -124,7 +151,8 @@ export const AUDIT_ISSUE_TYPES = {
     title: "重定向链",
     explanation:
       "到达最终页面需要连续经过两次或更多重定向。每次跳转都会增加延迟、损失链接权重并消耗抓取预算，过长的链可能无法被完整跟随。",
-    howToFix: "让初始网址及相关内部链接直接指向最终目标，最多保留一次重定向。",
+    howToFix:
+      "让初始网址及相关内部链接直接指向最终目标，最多保留一次重定向。",
   },
   "redirect-loop": {
     severity: "warning",
@@ -179,34 +207,40 @@ export const AUDIT_ISSUE_TYPES = {
     title: "标题过长",
     explanation:
       "标题超过约 60 个字符，搜索结果会将其截断，末尾内容可能显示不完整。",
-    howToFix: "将标题缩短到约 50 到 60 个字符，并把重要词语放在前面。",
+    howToFix:
+      "将标题缩短到约 50 到 60 个字符，并把重要词语放在前面。",
   },
   "title-too-short": {
     severity: "info",
     title: "标题过短",
-    explanation: "标题少于约 10 个字符，通常难以准确描述页面或吸引点击。",
+    explanation:
+      "标题少于约 10 个字符，通常难以准确描述页面或吸引点击。",
     howToFix:
       "将标题扩展为约 30 到 60 个字符的描述性短语，明确说明页面提供的内容。",
   },
   "meta-description-too-long": {
     severity: "info",
     title: "Meta 描述过长",
-    explanation: "Meta 描述超过约 160 个字符，搜索引擎会截断摘要。",
-    howToFix: "将描述缩短到约 70 到 160 个字符，同时保留核心信息和行动引导。",
+    explanation:
+      "Meta 描述超过约 160 个字符，搜索引擎会截断摘要。",
+    howToFix:
+      "将描述缩短到约 70 到 160 个字符，同时保留核心信息和行动引导。",
   },
   "meta-description-too-short": {
     severity: "info",
     title: "Meta 描述过短",
     explanation:
       "Meta 描述少于约 70 个字符，没有充分利用搜索结果摘要空间，搜索引擎也可能改用页面正文。",
-    howToFix: "将描述扩展到约 70 到 160 个字符，概括页面内容并提供点击理由。",
+    howToFix:
+      "将描述扩展到约 70 到 160 个字符，概括页面内容并提供点击理由。",
   },
   "heading-order-skip": {
     severity: "info",
     title: "标题层级跳跃",
     explanation:
       "标题层级存在跳跃，例如 H2 后直接使用 H4。这会削弱无障碍工具和内容解析所依赖的文档结构。",
-    howToFix: "调整标题层级，使其按 H1 → H2 → H3 逐级下降，避免跳级。",
+    howToFix:
+      "调整标题层级，使其按 H1 → H2 → H3 逐级下降，避免跳级。",
   },
   "slow-response": {
     severity: "info",

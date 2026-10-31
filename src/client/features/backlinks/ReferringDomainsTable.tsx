@@ -3,12 +3,12 @@ import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { useMemo } from "react";
 import { SafeExternalLink } from "@/client/components/SafeExternalLink";
 import {
-  AppDataTable,
-  useAppTable,
-} from "@/client/components/table/AppDataTable";
+  DataTable,
+  useDataTable,
+  type DataTableFrameProps,
+} from "@/client/components/table/DataTable";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
-import { HeaderHelpLabel } from "@/client/features/keywords/components";
-import { EmptyTableState } from "./BacklinksPageEmptyTableState";
+import { HelpLabel } from "@/client/components/HelpLabel";
 import type { ReferringDomainRow } from "./backlinksPageTypes";
 import type { ReferringDomainsSortField } from "@/types/schemas/backlinks";
 import {
@@ -25,6 +25,7 @@ const columnHelper = createColumnHelper<ReferringDomainRow>();
 const baseColumns = [
   columnHelper.accessor("domain", {
     id: "domain" satisfies ReferringDomainsSortField,
+    meta: { cellClassName: "font-medium break-all" },
     header: ({ column }) => (
       <SortableHeader
         column={column}
@@ -39,7 +40,7 @@ const baseColumns = [
         <SafeExternalLink
           url={getDomainWebsiteHref(domain)}
           label={domain}
-          className="link link-primary link-hover break-all inline-flex items-center gap-1"
+          className="inline-flex items-center gap-1 break-all text-primary underline-offset-4 hover:underline"
         />
       );
     },
@@ -73,7 +74,7 @@ const baseColumns = [
     header: ({ column }) => (
       <SortableHeader
         column={column}
-        label="权威度"
+        label="排名"
         helpText="引用域名的权威度分数。"
       />
     ),
@@ -85,7 +86,7 @@ const baseColumns = [
     header: ({ column }) => (
       <SortableHeader
         column={column}
-        label="垃圾风险"
+        label="Spam"
         helpText="引用域名的垃圾风险分数。"
       />
     ),
@@ -115,9 +116,9 @@ const baseColumns = [
     ),
     cell: ({ row }) => (
       <div className="text-sm">
-        <div>失效链接： {formatNumber(row.original.brokenBacklinks)}</div>
-        <div className="text-base-content/55">
-          失效页面： {formatNumber(row.original.brokenPages)}
+        <div>失效链接：{formatNumber(row.original.brokenBacklinks)}</div>
+        <div className="text-muted-foreground">
+          失效页面：{formatNumber(row.original.brokenPages)}
         </div>
       </div>
     ),
@@ -138,7 +139,7 @@ function buildReferringDomainColumns(domainRatings: DomainRatings | null) {
   const drColumn = columnHelper.display({
     id: "ahrefsDr",
     header: () => (
-      <HeaderHelpLabel
+      <HelpLabel
         label="Ahrefs DR"
         helpText="此引用域名的 Ahrefs 域名评级（0 到 100）。"
       />
@@ -146,7 +147,7 @@ function buildReferringDomainColumns(domainRatings: DomainRatings | null) {
     cell: ({ row }) => {
       const domain = row.original.domain;
       const dr = domain ? (ratings[domain] ?? null) : null;
-      return dr == null ? "—" : formatDecimal(dr);
+      return dr == null ? "-" : formatDecimal(dr);
     },
   });
 
@@ -171,7 +172,8 @@ export function ReferringDomainsTable({
   domainRatings,
   sorting,
   onSortingChange,
-}: {
+  ...frame
+}: DataTableFrameProps & {
   rows: ReferringDomainRow[];
   domainRatings: DomainRatings | null;
   sorting: SortingState;
@@ -182,7 +184,7 @@ export function ReferringDomainsTable({
     [domainRatings],
   );
 
-  const table = useAppTable({
+  const table = useDataTable({
     data: rows,
     columns,
     state: { sorting },
@@ -190,16 +192,11 @@ export function ReferringDomainsTable({
     manualSorting: true,
   });
 
-  if (rows.length === 0) {
-    return <EmptyTableState label="没有引用域名符合当前筛选条件。" />;
-  }
-
   return (
-    <AppDataTable
+    <DataTable
       table={table}
-      getCellClassName={(_, columnId) =>
-        columnId === "domain" ? "font-medium break-all" : undefined
-      }
+      empty={{ title: "未找到此目标的引用域名。" }}
+      {...frame}
     />
   );
 }

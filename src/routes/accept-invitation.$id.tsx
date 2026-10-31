@@ -1,14 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
+import { Spinner } from "@/client/components/Spinner";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { AuthPageCard, AuthPageShell } from "@/client/features/auth/AuthPage";
+import { clearLastProjectId } from "@/client/lib/active-project";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { authClient, signOutAndRedirect, useSession } from "@/lib/auth-client";
-import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { usesBetterAuthClient } from "@/lib/auth-mode";
 
 export const Route = createFileRoute("/accept-invitation/$id")({
   beforeLoad: () => {
-    if (!isHostedClientAuthMode()) {
+    if (!usesBetterAuthClient()) {
       throw notFound();
     }
   },
@@ -21,7 +25,9 @@ function AcceptInvitationPage() {
 
   return (
     <AuthPageShell>
-      {isSessionPending ? null : session?.user ? (
+      {isSessionPending ? (
+        <Spinner />
+      ) : session?.user ? (
         <InvitationCard invitationId={id} userEmail={session.user.email} />
       ) : (
         <SignedOutInvitationCard invitationId={id} />
@@ -38,24 +44,26 @@ function SignedOutInvitationCard({ invitationId }: { invitationId: string }) {
 
   return (
     <AuthPageCard title="你收到了邀请">
-      <p className="text-sm text-base-content/70">
-        你被邀请加入 OpenSEO 上的一个组织。请使用收到邀请的邮箱登录后接受。
+      <p className="text-sm text-muted-foreground">
+        你被邀请加入 OpenSEO 上的一个组织。请用收到邀请的邮箱地址登录，或用它创建账户，然后接受邀请。
       </p>
       <div className="space-y-2">
-        <Link
-          to="/sign-up"
-          search={{ redirect }}
-          className="btn btn-soft w-full"
+        <Button
+          nativeButton={false}
+          render={<Link to="/sign-up" search={{ redirect }} />}
+          variant="secondary"
+          className="w-full"
         >
-          创建账号
-        </Link>
-        <Link
-          to="/sign-in"
-          search={{ redirect }}
-          className="btn btn-ghost w-full"
+          创建账户
+        </Button>
+        <Button
+          nativeButton={false}
+          render={<Link to="/sign-in" search={{ redirect }} />}
+          variant="ghost"
+          className="w-full"
         >
           登录
-        </Link>
+        </Button>
       </div>
     </AuthPageCard>
   );
@@ -68,7 +76,9 @@ function InvitationCard({
   invitationId: string;
   userEmail: string;
 }) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    "accept" | "decline" | null
+  >(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [declined, setDeclined] = useState(false);
 
@@ -88,7 +98,7 @@ function InvitationCard({
 
   async function handleAccept() {
     setActionError(null);
-    setIsSubmitting(true);
+    setPendingAction("accept");
     try {
       const accepted = await authClient.organization.acceptInvitation({
         invitationId,
@@ -97,7 +107,7 @@ function InvitationCard({
         setActionError(
           accepted.error.message || "无法接受该邀请。",
         );
-        setIsSubmitting(false);
+        setPendingAction(null);
         return;
       }
 
@@ -108,18 +118,19 @@ function InvitationCard({
         organizationId: accepted.data.invitation.organizationId,
       });
       captureClientEvent("team:invitation_accept");
-      // Full navigation: every cached query in this tab belongs to the old
-      // workspace.
+      // Full navigation: every cached query in this tab, and the remembered
+      // project, belong to the old workspace.
+      clearLastProjectId();
       window.location.assign("/");
     } catch {
       setActionError("无法接受该邀请，请重试。");
-      setIsSubmitting(false);
+      setPendingAction(null);
     }
   }
 
   async function handleDecline() {
     setActionError(null);
-    setIsSubmitting(true);
+    setPendingAction("decline");
     try {
       const result = await authClient.organization.rejectInvitation({
         invitationId,
@@ -128,14 +139,14 @@ function InvitationCard({
         setActionError(
           result.error.message || "无法拒绝该邀请。",
         );
-        setIsSubmitting(false);
+        setPendingAction(null);
         return;
       }
       captureClientEvent("team:invitation_decline");
       setDeclined(true);
     } catch {
       setActionError("无法拒绝该邀请，请重试。");
-      setIsSubmitting(false);
+      setPendingAction(null);
     }
   }
 
@@ -143,7 +154,7 @@ function InvitationCard({
     return (
       <AuthPageCard title="正在核对邀请…">
         <div className="flex justify-center py-4">
-          <span className="loading loading-spinner loading-md" />
+          <Spinner />
         </div>
       </AuthPageCard>
     );
@@ -152,31 +163,37 @@ function InvitationCard({
   if (invitationQuery.isError) {
     return (
       <AuthPageCard title="邀请不可用">
-        <p className="text-sm text-base-content/70">
+        <p className="text-sm text-muted-foreground">
           此邀请可能已过期、已取消，或不属于当前邮箱。你当前登录的是{" "}
           <span className="font-medium" data-ph-mask>
             {userEmail}
           </span>
           .
         </p>
-        <p className="text-sm text-base-content/70">
-          如果邀请发到了另一个邮箱，请退出后用那个邮箱重新登录。否则请让同事重新发送邀请。
+        <p className="text-sm text-muted-foreground">
+          如果邀请发到了另一个邮箱，请退出并用那个邮箱重新登录。否则请让同事再发一封邀请。
         </p>
         <div className="space-y-2">
-          <button
+          <Button
             type="button"
-            className="btn btn-soft w-full"
+            variant="secondary"
+            className="w-full"
             onClick={() => {
               // Signs out, then lands on sign-in with a redirect back to this
               // invitation (staying signed in would bounce straight back here).
               signOutAndRedirect();
             }}
           >
-            使用其他账号
-          </button>
-          <Link to="/" className="btn btn-ghost w-full">
+            换一个账户
+          </Button>
+          <Button
+            nativeButton={false}
+            render={<Link to="/" />}
+            variant="ghost"
+            className="w-full"
+          >
             前往仪表盘
-          </Link>
+          </Button>
         </div>
       </AuthPageCard>
     );
@@ -185,50 +202,63 @@ function InvitationCard({
   if (declined) {
     return (
       <AuthPageCard title="已拒绝邀请">
-        <p className="text-sm text-base-content/70">
+        <p className="text-sm text-muted-foreground">
           你已拒绝加入{" "}
           <span className="font-medium">
             {invitationQuery.data.organizationName}
           </span>
           .
         </p>
-        <Link to="/" className="btn btn-ghost w-full">
-          前往仪表盘
-        </Link>
+        <Button
+          nativeButton={false}
+          render={<Link to="/" />}
+          variant="ghost"
+          className="w-full"
+        >
+            前往仪表盘
+        </Button>
       </AuthPageCard>
     );
   }
 
   return (
     <AuthPageCard title="加入组织">
-      <p className="text-sm text-base-content/70">
+      <p className="text-sm text-muted-foreground">
         <span className="font-medium" data-ph-mask>
           {invitationQuery.data.inviterEmail}
         </span>{" "}
         邀请你加入{" "}
         <span className="font-medium">
           {invitationQuery.data.organizationName}
-        </span>
-        。
+        </span>{" "}
+        （OpenSEO）。
       </p>
-      {actionError ? <p className="text-sm text-error">{actionError}</p> : null}
+      {actionError ? (
+        <Alert variant="destructive">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      ) : null}
       <div className="space-y-2">
-        <button
+        <Button
           type="button"
-          className="btn btn-soft w-full"
-          disabled={isSubmitting}
+          variant="secondary"
+          className="w-full"
+          pending={pendingAction === "accept"}
+          disabled={pendingAction !== null}
           onClick={() => void handleAccept()}
         >
-          {isSubmitting ? "加入中…" : "接受邀请"}
-        </button>
-        <button
+          {pendingAction === "accept" ? "加入中…" : "接受邀请"}
+        </Button>
+        <Button
           type="button"
-          className="btn btn-ghost w-full"
-          disabled={isSubmitting}
+          variant="ghost"
+          className="w-full"
+          pending={pendingAction === "decline"}
+          disabled={pendingAction !== null}
           onClick={() => void handleDecline()}
         >
-          拒绝
-        </button>
+          {pendingAction === "decline" ? "正在拒绝…" : "拒绝"}
+        </Button>
       </div>
     </AuthPageCard>
   );

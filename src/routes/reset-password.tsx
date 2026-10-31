@@ -1,36 +1,26 @@
-import { useForm } from "@tanstack/react-form";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { useAppForm } from "@/client/components/form/useAppForm";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
 import {
   AuthPageCard,
   AuthPageShell,
   authRedirectSearchSchema,
 } from "@/client/features/auth/AuthPage";
-import { getFieldError, getFormError } from "@/client/lib/forms";
+import { passwordSchema } from "@/client/features/auth/passwordSchema";
+import { getFormError } from "@/client/lib/forms";
 import { authClient } from "@/lib/auth-client";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
 import { getSignInSearch, normalizeAuthRedirect } from "@/lib/auth-redirect";
-import {
-  HOSTED_PASSWORD_MAX_LENGTH,
-  HOSTED_PASSWORD_MIN_LENGTH,
-} from "@/lib/auth-options";
 import { z } from "zod";
 
 const resetPasswordSchema = z
   .object({
-    password: z
-      .string()
-      .min(
-        HOSTED_PASSWORD_MIN_LENGTH,
-        `Password must be at least ${HOSTED_PASSWORD_MIN_LENGTH} characters.`,
-      )
-      .max(
-        HOSTED_PASSWORD_MAX_LENGTH,
-        `Password must be at most ${HOSTED_PASSWORD_MAX_LENGTH} characters.`,
-      ),
+    password: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((value) => value.password === value.confirmPassword, {
-    message: "Passwords do not match.",
+    message: "两次输入的密码不一致。",
     path: ["confirmPassword"],
   });
 
@@ -47,12 +37,12 @@ export const Route = createFileRoute("/reset-password")({
 function getResetPasswordErrorMessage(error: string | undefined) {
   switch ((error ?? "").toLowerCase()) {
     case "invalid_token":
-      return "This reset link is no longer valid. Request a new one to keep going.";
+      return "此重置链接已失效。请重新申请以继续。";
     case "token_expired":
-      return "This reset link has expired. Request a new one to keep going.";
+      return "此重置链接已过期。请重新申请以继续。";
     default:
       return error
-        ? "This reset link can't be used anymore. Request a new one and try again."
+        ? "此重置链接已无法使用。请重新申请后再试。"
         : null;
   }
 }
@@ -70,31 +60,28 @@ function getResetPasswordPageCopy({
 }) {
   if (!isHostedMode) {
     return {
-      title: "Reset password",
-      helperText: "Password reset isn't available right now.",
+      title: "重置密码",
+      helperText: "密码重置暂时不可用。",
     };
   }
 
   if (isComplete) {
     return {
-      title: "Password updated",
-      helperText:
-        "Your password has been updated. Sign in with your new password.",
+      title: "密码已更新",
+      helperText: "密码已更新。请用新密码登录。",
     };
   }
 
   if (routeError || !hasToken) {
     return {
-      title: "Reset link expired",
-      helperText:
-        routeError ||
-        "This reset link is no longer valid. Request a new one to keep going.",
+      title: "重置链接已过期",
+      helperText: routeError || "此重置链接已失效。请重新申请以继续。",
     };
   }
 
   return {
-    title: "Reset password",
-    helperText: "Choose a new password for your account.",
+    title: "重置密码",
+    helperText: "为账户设置新密码。",
   };
 }
 
@@ -103,8 +90,8 @@ function ResetPasswordPage() {
   const redirectTo = normalizeAuthRedirect(search.redirect);
   const isHostedMode = isHostedClientAuthMode();
   const routeError = getResetPasswordErrorMessage(search.error);
-  const token = typeof search.token === "string" ? search.token : null;
-  const form = useForm({
+  const token = search.token;
+  const form = useAppForm({
     defaultValues: {
       password: "",
       confirmPassword: "",
@@ -112,17 +99,8 @@ function ResetPasswordPage() {
     validators: {
       onSubmit: resetPasswordSchema,
     },
+    // The form only renders when the URL carries a token.
     onSubmit: async ({ formApi, value }) => {
-      if (!token) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: "This reset link is no longer valid. Request a new one and try again.",
-            fields: {},
-          },
-        });
-        return;
-      }
-
       try {
         const result = await authClient.resetPassword({
           newPassword: value.password,
@@ -132,7 +110,10 @@ function ResetPasswordPage() {
         if (result.error) {
           formApi.setErrorMap({
             onSubmit: {
-              form: "This reset link is no longer valid. Request a new one and try again.",
+              form:
+                result.error.code === "INVALID_TOKEN" || !result.error.message
+                  ? "此重置链接已失效。请重新申请后再试。"
+                  : result.error.message,
               fields: {},
             },
           });
@@ -141,7 +122,7 @@ function ResetPasswordPage() {
       } catch {
         formApi.setErrorMap({
           onSubmit: {
-            form: "We couldn't update your password right now. Please try again.",
+            form: "暂时无法更新密码，请重试。",
             fields: {},
           },
         });
@@ -172,108 +153,87 @@ function ResetPasswordPage() {
               title={pageCopy.title}
               helperText={pageCopy.helperText}
               footer={
-                <p className="text-sm">
-                  <Link
-                    to="/sign-in"
-                    search={getSignInSearch(redirectTo)}
-                    className="text-base-content/50 hover:text-base-content transition-colors"
-                  >
-                    Sign in
-                  </Link>
-                </p>
+                isComplete ? undefined : (
+                  <p className="text-sm">
+                    <Link
+                      to="/sign-in"
+                      search={getSignInSearch(redirectTo)}
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      登录
+                    </Link>
+                  </p>
+                )
               }
             >
               {!isHostedMode ? null : isComplete ? (
-                <a
-                  href={
-                    redirectTo === "/"
-                      ? "/sign-in"
-                      : `/sign-in?redirect=${encodeURIComponent(redirectTo)}`
+                <Button
+                  nativeButton={false}
+                  variant="secondary"
+                  className="w-full"
+                  render={
+                    <Link to="/sign-in" search={getSignInSearch(redirectTo)} />
                   }
-                  className="btn btn-soft w-full"
                 >
-                  Continue to sign in
-                </a>
+                  继续登录
+                </Button>
               ) : routeError || !token ? (
-                <Link
-                  to="/forgot-password"
-                  search={getSignInSearch(redirectTo)}
-                  className="btn btn-soft w-full"
+                <Button
+                  nativeButton={false}
+                  variant="secondary"
+                  className="w-full"
+                  render={
+                    <Link
+                      to="/forgot-password"
+                      search={getSignInSearch(redirectTo)}
+                    />
+                  }
                 >
-                  Request a new reset link
-                </Link>
+                  申请新的重置链接
+                </Button>
               ) : (
-                <form
-                  className="space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void form.handleSubmit();
-                  }}
-                >
-                  <form.Field name="password">
-                    {(field) => {
-                      const error = getFieldError(field.state.meta.errors);
+                <form.AppForm>
+                  <form.Form className="space-y-4">
+                    <form.AppField name="password">
+                      {(field) => (
+                        <field.TextField
+                          label="新密码"
+                          type="password"
+                          placeholder="新密码…"
+                          autoComplete="new-password"
+                          required
+                        />
+                      )}
+                    </form.AppField>
+                    <form.AppField name="confirmPassword">
+                      {(field) => (
+                        <field.TextField
+                          label="确认新密码"
+                          type="password"
+                          placeholder="确认新密码…"
+                          autoComplete="new-password"
+                          required
+                        />
+                      )}
+                    </form.AppField>
 
-                      return (
-                        <div>
-                          <input
-                            type="password"
-                            className="input input-bordered w-full"
-                            placeholder="New password..."
-                            value={field.state.value}
-                            onChange={(event) =>
-                              field.handleChange(event.target.value)
-                            }
-                            autoComplete="new-password"
-                            minLength={HOSTED_PASSWORD_MIN_LENGTH}
-                            maxLength={HOSTED_PASSWORD_MAX_LENGTH}
-                            required
-                          />
-                          {error ? (
-                            <p className="mt-1 text-sm text-error">{error}</p>
-                          ) : null}
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-
-                  <form.Field name="confirmPassword">
-                    {(field) => {
-                      const error = getFieldError(field.state.meta.errors);
-
-                      return (
-                        <div>
-                          <input
-                            type="password"
-                            className="input input-bordered w-full"
-                            placeholder="Confirm new password..."
-                            value={field.state.value}
-                            onChange={(event) =>
-                              field.handleChange(event.target.value)
-                            }
-                            autoComplete="new-password"
-                            minLength={HOSTED_PASSWORD_MIN_LENGTH}
-                            maxLength={HOSTED_PASSWORD_MAX_LENGTH}
-                            required
-                          />
-                          {error ? (
-                            <p className="mt-1 text-sm text-error">{error}</p>
-                          ) : null}
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-
-                  {errorMessage ? (
-                    <p className="text-sm text-error">{errorMessage}</p>
-                  ) : null}
-                  <button
-                    className="btn btn-soft w-full"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Updating password..." : "Update password"}
-                  </button>
-                </form>
+                    {errorMessage ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>{errorMessage}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      className="w-full"
+                      pending={isSubmitting}
+                    >
+                      {isSubmitting
+                        ? "正在更新密码…"
+                        : "更新密码"}
+                    </Button>
+                  </form.Form>
+                </form.AppForm>
               )}
             </AuthPageCard>
           );

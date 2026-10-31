@@ -1,162 +1,96 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
+import { MoreHorizontal, Play, RefreshCw } from "lucide-react";
+import { ConfirmDialog } from "@/client/components/ConfirmDialog";
+import { Button } from "@/client/components/ui/button";
 import {
-  ChevronDown,
-  Copy,
-  Download,
-  FileDown,
-  MoreHorizontal,
-  Play,
-  RefreshCw,
-  Sheet,
-} from "lucide-react";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/client/components/ui/dropdown-menu";
 
-function ToolbarMenu({
-  label,
-  icon,
-  title,
-  children,
-}: {
-  label?: string;
-  icon?: ReactNode;
-  title?: string;
-  children: ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        className={`btn btn-ghost btn-sm ${label ? "gap-1" : "btn-square"}`}
-        onClick={() => setOpen((c) => !c)}
-        title={title}
-        aria-label={title ?? label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        {icon}
-        {label}
-        {label && <ChevronDown className="size-3.5 opacity-60" />}
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            role="menu"
-            className="absolute right-0 top-full mt-1 z-50 rounded-lg border border-base-300 bg-base-100 shadow-lg py-1 min-w-[230px]"
-            onClick={() => setOpen(false)}
-          >
-            {children}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function MenuItem({
-  icon,
+function ItemText({
   label,
   description,
-  onClick,
-  disabled,
 }: {
-  icon: ReactNode;
   label: string;
-  description?: string;
-  onClick: () => void;
-  disabled?: boolean;
+  description: string;
 }) {
   return (
-    <button
-      type="button"
-      role="menuitem"
-      className="flex w-full items-start gap-2 px-3 py-2 text-sm hover:bg-base-200 disabled:opacity-50"
-      onClick={onClick}
-      disabled={disabled}
-    >
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      <span className="flex flex-col items-start text-left">
-        <span>{label}</span>
-        {description && (
-          <span className="text-xs text-base-content/50">{description}</span>
-        )}
-      </span>
-    </button>
+    <span className="flex flex-col">
+      <span>{label}</span>
+      <span className="text-xs text-muted-foreground">{description}</span>
+    </span>
   );
 }
 
 export function MoreMenu({
   onCheckNow,
   checkBusy,
-  checkDisabled,
   onRefreshMetrics,
   metricsRefreshing,
+  trackedKeywordCount,
   hasData,
 }: {
   onCheckNow: () => void;
   checkBusy: boolean;
-  checkDisabled: boolean;
   onRefreshMetrics: () => void;
   metricsRefreshing: boolean;
+  trackedKeywordCount: number;
   hasData: boolean;
 }) {
+  const [confirmingRefresh, setConfirmingRefresh] = useState(false);
   return (
-    <ToolbarMenu icon={<MoreHorizontal className="size-4" />} title="更多操作">
-      {!checkDisabled && (
-        <MenuItem
-          icon={<Play className="size-3.5" />}
-          label={checkBusy ? "运行中…" : "检查排名"}
-          description="获取当前 Google 排名"
-          onClick={onCheckNow}
-          disabled={checkBusy}
-        />
-      )}
-      <MenuItem
-        icon={
-          <RefreshCw
-            className={`size-3.5 ${metricsRefreshing ? "animate-spin" : ""}`}
-          />
-        }
-        label={metricsRefreshing ? "刷新中…" : "更新关键词数据"}
-        description="更新搜索量、难度和 CPC，不更新排名"
-        onClick={onRefreshMetrics}
-        disabled={metricsRefreshing || !hasData}
-      />
-    </ToolbarMenu>
-  );
-}
-
-export function ExportMenu({
-  onExport,
-  onExportToSheets,
-  onCopyKeywords,
-  hasData,
-}: {
-  onExport: () => void;
-  onExportToSheets: () => void;
-  onCopyKeywords: () => void;
-  hasData: boolean;
-}) {
-  return (
-    <ToolbarMenu label="导出" icon={<Download className="size-3.5" />}>
-      <MenuItem
-        icon={<Sheet className="size-3.5" />}
-        label="导出到 Google 表格"
-        onClick={onExportToSheets}
-        disabled={!hasData}
-      />
-      <MenuItem
-        icon={<FileDown className="size-3.5" />}
-        label="导出 CSV"
-        onClick={onExport}
-        disabled={!hasData}
-      />
-      <MenuItem
-        icon={<Copy className="size-3.5" />}
-        label="复制关键词"
-        onClick={onCopyKeywords}
-        disabled={!hasData}
-      />
-    </ToolbarMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="更多操作"
+              title="更多操作"
+            />
+          }
+        >
+          <MoreHorizontal />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onClick={onCheckNow} disabled={checkBusy}>
+            <Play />
+            <ItemText
+              label={checkBusy ? "运行中…" : "检查排名"}
+              description="获取当前 Google 排名"
+            />
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => setConfirmingRefresh(true)}
+            disabled={metricsRefreshing || !hasData}
+          >
+            <RefreshCw className={metricsRefreshing ? "animate-spin" : ""} />
+            <ItemText
+              label={
+                metricsRefreshing ? "刷新中…" : "更新关键词数据"
+              }
+              description="更新搜索量、难度和 CPC，不更新排名"
+            />
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {confirmingRefresh ? (
+        <ConfirmDialog
+          title="更新关键词数据？"
+          confirmLabel="更新数据"
+          onConfirm={() => {
+            setConfirmingRefresh(false);
+            onRefreshMetrics();
+          }}
+          onClose={() => setConfirmingRefresh(false)}
+        >
+          将为全部 {trackedKeywordCount}{" "}
+          个已追踪关键词获取新的搜索量、难度和 CPC。每个关键词都会消耗额度。排名不会变化。
+        </ConfirmDialog>
+      ) : null}
+    </>
   );
 }

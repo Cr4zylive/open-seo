@@ -1,18 +1,20 @@
-import { useForm } from "@tanstack/react-form";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { useAppForm } from "@/client/components/form/useAppForm";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
 import {
   AuthPageCard,
   AuthPageShell,
   authRedirectSearchSchema,
 } from "@/client/features/auth/AuthPage";
-import { getFieldError, getFormError } from "@/client/lib/forms";
+import { getFormError } from "@/client/lib/forms";
 import { authClient } from "@/lib/auth-client";
-import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { isHostedClientAuthMode, usesBetterAuthClient } from "@/lib/auth-mode";
 import { getSignInSearch, normalizeAuthRedirect } from "@/lib/auth-redirect";
 import { z } from "zod";
 
 const forgotPasswordSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address."),
+  email: z.string().trim().email("请输入有效的邮箱地址。"),
 });
 
 export const Route = createFileRoute("/forgot-password")({
@@ -24,8 +26,11 @@ function ForgotPasswordPage() {
   const search = Route.useSearch();
   const redirectTo = normalizeAuthRedirect(search.redirect);
   const isHostedMode = isHostedClientAuthMode();
+  // Self-hosted accounts have no email transport; the operator resets
+  // passwords with the admin command.
+  const isOperatorReset = !isHostedMode && usesBetterAuthClient();
 
-  const form = useForm({
+  const form = useAppForm({
     defaultValues: {
       email: "",
     },
@@ -45,7 +50,7 @@ function ForgotPasswordPage() {
         if (result.error) {
           formApi.setErrorMap({
             onSubmit: {
-              form: result.error.message || "We couldn't send the reset email.",
+              form: result.error.message || "无法发送重置邮件。",
               fields: {},
             },
           });
@@ -54,7 +59,7 @@ function ForgotPasswordPage() {
       } catch {
         formApi.setErrorMap({
           onSubmit: {
-            form: "We couldn't send the reset email right now. Please try again.",
+            form: "暂时无法发送重置邮件，请重试。",
             fields: {},
           },
         });
@@ -77,77 +82,69 @@ function ForgotPasswordPage() {
 
           return (
             <AuthPageCard
-              title={isSuccess ? "Check your email" : "Forgot password"}
+              title={isSuccess ? "请查看邮箱" : "忘记密码"}
               helperText={
                 isSuccess
-                  ? `If an account exists for ${submittedEmail}, we sent a reset link.`
+                  ? undefined
                   : isHostedMode
-                    ? "Enter your email and we'll send you a password reset link."
-                    : "Password reset isn't available right now."
+                    ? "输入邮箱，我们会发送密码重置链接。"
+                    : isOperatorReset
+                      ? "请让服务器管理员重置密码。"
+                      : "密码重置暂时不可用。"
               }
               footer={
                 <p className="text-sm">
                   <Link
                     to="/sign-in"
                     search={getSignInSearch(redirectTo)}
-                    className="text-base-content/50 hover:text-base-content transition-colors"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
                   >
-                    Back to sign in
+                    返回登录
                   </Link>
                 </p>
               }
             >
               {isSuccess ? (
-                <div className="alert alert-success">
-                  <span>
-                    If an account exists for that email, you'll receive password
-                    reset instructions shortly.
-                  </span>
-                </div>
+                <Alert variant="success">
+                  <AlertDescription>
+                    如果 {submittedEmail}{" "}
+                    有对应账户，你很快会收到密码重置说明。
+                  </AlertDescription>
+                </Alert>
               ) : (
-                <form
-                  className="space-y-4"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void form.handleSubmit();
-                  }}
-                >
-                  <form.Field name="email">
-                    {(field) => {
-                      const error = getFieldError(field.state.meta.errors);
+                <form.AppForm>
+                  <form.Form className="space-y-4">
+                    <form.AppField name="email">
+                      {(field) => (
+                        <field.TextField
+                          label="邮箱地址"
+                          type="email"
+                          placeholder="邮箱地址…"
+                          autoComplete="email"
+                          disabled={!isHostedMode}
+                          required
+                        />
+                      )}
+                    </form.AppField>
 
-                      return (
-                        <div>
-                          <input
-                            type="email"
-                            className="input input-bordered w-full"
-                            placeholder="Email address..."
-                            value={field.state.value}
-                            onChange={(event) =>
-                              field.handleChange(event.target.value)
-                            }
-                            autoComplete="email"
-                            disabled={!isHostedMode}
-                            required
-                          />
-                          {error ? (
-                            <p className="mt-1 text-sm text-error">{error}</p>
-                          ) : null}
-                        </div>
-                      );
-                    }}
-                  </form.Field>
-
-                  {errorMessage ? (
-                    <p className="text-sm text-error">{errorMessage}</p>
-                  ) : null}
-                  <button
-                    className="btn btn-soft w-full"
-                    disabled={!isHostedMode || isSubmitting}
-                  >
-                    {isSubmitting ? "Sending reset link..." : "Send reset link"}
-                  </button>
-                </form>
+                    {errorMessage ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>{errorMessage}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      className="w-full"
+                      pending={isSubmitting}
+                      disabled={!isHostedMode}
+                    >
+                      {isSubmitting
+                        ? "正在发送重置链接…"
+                        : "发送重置链接"}
+                    </Button>
+                  </form.Form>
+                </form.AppForm>
               )}
             </AuthPageCard>
           );

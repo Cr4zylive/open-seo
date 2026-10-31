@@ -75,7 +75,8 @@ export function formatMetric(
   value: number | null | undefined,
   hasData: boolean | undefined,
 ) {
-  if (!hasData) return "数据不足";
+  // The page's "数据不足" banner explains the empty values.
+  if (!hasData) return "-";
   return formatRounded(value);
 }
 
@@ -83,7 +84,7 @@ type ExportTable = { headers: string[]; rows: (string | number | null)[][] };
 
 export function keywordsToTable(rows: KeywordRow[]): ExportTable {
   return {
-    headers: ["关键词", "排名", "搜索量", "流量", "CPC", "网址", "难度"],
+    headers: ["关键词", "排名", "搜索量", "流量", "CPC", "URL", "难度"],
     rows: rows.map((row) => [
       row.keyword,
       row.position,
@@ -100,5 +101,17 @@ export function pagesToTable(rows: PageRow[]): ExportTable {
   return {
     headers: ["页面", "自然搜索流量", "关键词"],
     rows: rows.map((row) => [row.page, row.organicTraffic, row.keywords]),
+  };
+}
+
+/** Adapts the URL-driven domain sort to the shared `SortableHeader`. */
+export function domainSortColumn(
+  isActive: boolean,
+  order: SortOrder,
+  onClick: () => void,
+) {
+  return {
+    getIsSorted: () => (isActive ? order : false),
+    getToggleSortingHandler: () => onClick,
   };
 }

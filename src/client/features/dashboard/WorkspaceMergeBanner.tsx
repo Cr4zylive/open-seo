@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
-import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { Alert, AlertDescription } from "@/client/components/ui/alert";
+import { Button } from "@/client/components/ui/button";
+import { usesBetterAuthClient } from "@/lib/auth-mode";
 import {
   getWorkspaceMergeStatus,
   mergeLegacyWorkspaces,
@@ -17,19 +18,19 @@ export function WorkspaceMergeBanner() {
   const statusQuery = useQuery({
     queryKey: ["workspaceMergeStatus"],
     queryFn: () => getWorkspaceMergeStatus(),
-    enabled: !isHostedClientAuthMode(),
+    enabled: !usesBetterAuthClient(),
   });
 
   const mergeMutation = useMutation({
     mutationFn: () => mergeLegacyWorkspaces(),
     onSuccess: ({ mergedWorkspaces }) => {
-      toast.success(`已将 ${mergedWorkspaces} 个工作区迁移到共享工作区。`);
+      toast.success(
+        `已将 ${mergedWorkspaces} 个组织迁移到共享组织。`,
+      );
       // The merge changes projects, connections, and the banner's own status —
       // refetch everything rather than enumerating keys.
       void queryClient.invalidateQueries();
     },
-    onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "无法迁移工作区，请重试。"))
   });
 
   if (!statusQuery.data || statusQuery.data.legacyWorkspaceCount === 0) {
@@ -37,19 +38,20 @@ export function WorkspaceMergeBanner() {
   }
 
   return (
-    <div className="rounded-xl border border-warning/40 bg-warning/10 p-5">
-      <p className="max-w-3xl text-sm">
-        Cloudflare
-        自托管版本曾存在工作区问题，每位用户会获得独立工作区。系统设计为所有用户共用一个工作区。点击下方按钮可将所有用户之前的内容迁移到共享工作区。
-      </p>
-      <button
-        type="button"
-        className="btn btn-primary btn-sm mt-4"
-        disabled={mergeMutation.isPending}
+    <Alert variant="warning" className="p-5">
+      <AlertDescription className="max-w-3xl text-foreground">
+        在 Cloudflare 上自托管时，曾有一个 bug：每个用户都有独立工作区。原本应
+        该所有人共用一个工作区。点击下方按钮，会把大家之前的工作迁移到这个共享
+        工作区。
+      </AlertDescription>
+      <Button
+        size="sm"
+        className="mt-4 justify-self-start"
+        pending={mergeMutation.isPending}
         onClick={() => mergeMutation.mutate()}
       >
         {mergeMutation.isPending ? "迁移中…" : "迁移工作区"}
-      </button>
-    </div>
+      </Button>
+    </Alert>
   );
 }

@@ -10,19 +10,19 @@ export type CreditFeature =
   | "agent";
 
 const CREDIT_FEATURE_LABELS: Record<string, string> = {
-  keyword_research: "Keyword Research",
-  domain_overview: "Domain Overview",
-  backlinks: "Backlinks",
-  site_audit: "Site Audit",
-  rank_tracking: "Rank Tracking",
-  ai_citations: "AI Citations",
-  ai_prompt_responses: "AI Prompt Responses",
-  ai_search: "AI Search",
-  local_seo: "Local SEO",
+  keyword_research: "关键词研究",
+  domain_overview: "域名概览",
+  backlinks: "反向链接",
+  site_audit: "站点审计",
+  rank_tracking: "排名追踪",
+  ai_citations: "AI 引用",
+  ai_prompt_responses: "AI 提示词回答",
+  ai_search: "AI 搜索",
+  local_seo: "本地 SEO",
   // The onboarding chat is gone, but historical usage events still carry this
   // key — keep the label so old billing breakdowns don't render "Other".
-  onboarding: "Onboarding",
-  agent: "SAM Agent",
+  onboarding: "新手引导",
+  agent: "SAM 智能体",
 };
 
 /**
@@ -47,12 +47,13 @@ export function mapDataforseoPathToCreditFeature(
         ? "local_seo"
         : "keyword_research";
     case "ai_optimization":
-      // llm_mentions/* are brand-citation lookups; every other ai_optimization
-      // endpoint is a provider /llm_responses prompt response (chat_gpt, claude,
-      // gemini, perplexity).
-      return normalizedPath[2] === "llm_mentions"
-        ? "ai_citations"
-        : "ai_prompt_responses";
+      // llm_mentions/* are brand-citation lookups and ai_keyword_data/* is
+      // keyword volume research; every other ai_optimization endpoint is a
+      // provider /llm_responses prompt response (chat_gpt, claude, gemini,
+      // perplexity).
+      if (normalizedPath[2] === "llm_mentions") return "ai_citations";
+      if (normalizedPath[2] === "ai_keyword_data") return "keyword_research";
+      return "ai_prompt_responses";
     case "business_data":
       return "local_seo";
     case "keywords_data":

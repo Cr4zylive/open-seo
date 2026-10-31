@@ -1,7 +1,23 @@
 import { useMemo } from "react";
-import { Loader2 } from "lucide-react";
+import { CircleSlash } from "lucide-react";
 import { sort } from "remeda";
 import type { RankPositionMatrixCell } from "@/serverFunctions/rank-tracking";
+import { EmptyState } from "@/client/components/EmptyState";
+import { Button } from "@/client/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCard,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/client/components/ui/tooltip";
 
 /**
  * "By date" view: keyword rows × recent check columns, each cell the position
@@ -10,73 +26,104 @@ import type { RankPositionMatrixCell } from "@/serverFunctions/rank-tracking";
  */
 export function RankTrackingHistoryMatrix({
   cells,
-  isLoading,
   keywords,
+  onClearFilters,
 }: {
   cells: RankPositionMatrixCell[];
-  isLoading: boolean;
   keywords: { trackingKeywordId: string; keyword: string }[];
+  onClearFilters: () => void;
 }) {
   const { runs, cellByKeyword } = useMemo(() => buildMatrix(cells), [cells]);
 
-  if (isLoading) {
+  // The History view is only offered once the matrix has loaded at least two
+  // runs, so only filters can leave this empty.
+  if (keywords.length === 0) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="size-5 animate-spin text-base-content/50" />
-      </div>
-    );
-  }
-
-  if (runs.length === 0 || keywords.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-base-300 p-10 text-center text-sm text-base-content/55">
-        暂无历史记录。运行检查后即可生成时间线。
-      </div>
+      <EmptyState
+        kind="filtered"
+        title="没有符合这些筛选条件的关键词"
+        description="更改或清除筛选条件以查看更多关键词。"
+        action={
+          <Button variant="outline" size="sm" onClick={onClearFilters}>
+            清除筛选
+          </Button>
+        }
+      />
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-base-300">
-      <table className="table table-sm">
-        <thead>
-          <tr>
+    <TableCard>
+      <Table>
+        <TableHeader>
+          <TableRow>
             {/* Unconstrained keyword column absorbs the slack when only a few
                 check columns exist, so sparse history doesn't stretch oddly. */}
-            <th className="sticky left-0 z-10 bg-base-100 w-full">关键词</th>
+            <TableHead className="sticky left-0 z-10 w-full bg-card">
+              关键词
+            </TableHead>
             {runs.map((r) => (
-              <th
-                key={r.runId}
-                className="w-24 whitespace-nowrap text-right text-xs font-medium text-base-content/60"
-              >
+              <TableHead key={r.runId} className="w-24 text-right">
                 {formatDate(r.checkedAt)}
-              </th>
+              </TableHead>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {keywords.map((kw) => {
             const byRun = cellByKeyword.get(kw.trackingKeywordId);
             return (
-              <tr key={kw.trackingKeywordId}>
-                <td className="sticky left-0 z-10 bg-base-100 whitespace-nowrap font-medium">
+              <TableRow key={kw.trackingKeywordId}>
+                <TableCell className="sticky left-0 z-10 bg-card font-medium whitespace-nowrap">
                   {kw.keyword}
-                </td>
+                </TableCell>
                 {runs.map((r, i) => {
+                  // No row for a run after the keyword's first result means
+                  // that check failed. Before the first result, the keyword
+                  // was not tracked yet.
+                  const notChecked =
+                    !byRun?.has(r.runId) &&
+                    runs.slice(0, i).some((prev) => byRun?.has(prev.runId));
                   const position = byRun?.get(r.runId) ?? null;
                   const previous =
                     i > 0 ? (byRun?.get(runs[i - 1].runId) ?? null) : undefined;
                   return (
-                    <td key={r.runId} className="text-right">
-                      <MatrixCell position={position} previous={previous} />
-                    </td>
+                    <TableCell key={r.runId} className="text-right">
+                      {notChecked ? (
+                        <NotCheckedCell />
+                      ) : (
+                        <MatrixCell position={position} previous={previous} />
+                      )}
+                    </TableCell>
                   );
                 })}
-              </tr>
+              </TableRow>
             );
           })}
-        </tbody>
-      </table>
-    </div>
+        </TableBody>
+      </Table>
+    </TableCard>
+  );
+}
+
+function NotCheckedCell() {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          // An icon fits the numeric column.
+          <span
+            aria-label="未检查"
+            className="inline-flex cursor-help align-middle text-muted-foreground"
+          />
+        }
+      >
+        <CircleSlash className="size-3.5" aria-hidden />
+      </TooltipTrigger>
+      <TooltipContent>
+        未检查：检查失败，未记录排名。
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -88,7 +135,7 @@ function MatrixCell({
   previous: number | null | undefined;
 }) {
   if (position === null) {
-    return <span className="text-base-content/30">—</span>;
+    return <span className="text-muted-foreground">—</span>;
   }
   // Only show a change arrow when both checks ranked (no subtracting through a
   // null, matching the rest of the rank-tracking UI).
