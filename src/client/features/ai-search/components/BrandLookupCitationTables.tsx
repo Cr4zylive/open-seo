@@ -1,10 +1,16 @@
-import { useState } from "react";
-import { createColumnHelper, type Table } from "@tanstack/react-table";
+import { createColumnHelper } from "@tanstack/react-table";
 import { Link } from "@tanstack/react-router";
 import { ExternalLink, Sparkles } from "lucide-react";
-import { AppDataTable } from "@/client/components/table/AppDataTable";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
-import { HeaderHelpLabel } from "@/client/features/keywords/components";
+import { HelpLabel } from "@/client/components/HelpLabel";
+import { ExpandableList } from "@/client/components/ExpandableList";
+import { Badge } from "@/client/components/ui/badge";
+import { buttonVariants } from "@/client/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/client/components/ui/tooltip";
 import { numericNullsLast } from "@/client/components/table/nullSafeSort";
 import {
   formatCount,
@@ -27,13 +33,14 @@ function HeaderWithHelp({
   helpText: string;
 }) {
   return (
-    <span className="uppercase tracking-wider">
-      <HeaderHelpLabel label={label} helpText={helpText} />
+    <span className="tracking-wider uppercase">
+      <HelpLabel label={label} helpText={helpText} />
     </span>
   );
 }
 
-const PLATFORM_HELP = "生成回答的 AI 平台：ChatGPT 或 Google AI 摘要。";
+const PLATFORM_HELP =
+  "生成回答的 AI 平台：ChatGPT 或 Google AI 摘要。";
 
 /**
  * Platform indicator used only when a table actually spans >1 platform. A dot +
@@ -42,7 +49,7 @@ const PLATFORM_HELP = "生成回答的 AI 平台：ChatGPT 或 Google AI 摘要�
  */
 function PlatformCell({ platform }: { platform: PlatformKey }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-base-content/70">
+    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <span
         className={`size-1.5 rounded-full ${PLATFORM_DOT_CLASS[platform]}`}
       />
@@ -98,16 +105,14 @@ function PageUrlCell({
       className="group block max-w-xl"
     >
       <span className="inline-flex items-center gap-1.5">
-        <span className="font-medium text-base-content group-hover:underline">
+        <span className="font-medium text-foreground group-hover:underline">
           {row.domain ?? formatUrlForDisplay(row.url)}
         </span>
-        {isOwn ? (
-          <span className="badge badge-primary badge-xs border-0">您</span>
-        ) : null}
-        <ExternalLink className="size-3 shrink-0 text-base-content/40" />
+        {isOwn ? <Badge size="sm">自有</Badge> : null}
+        <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
       </span>
       {path ? (
-        <span className="block truncate text-xs text-base-content/50">
+        <span className="block truncate text-xs text-muted-foreground">
           {path}
         </span>
       ) : null}
@@ -129,52 +134,41 @@ function KeywordsCell({
   projectId: string;
   brand: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
   if (keywords.length === 0) {
-    return <span className="text-base-content/40">—</span>;
+    return <span className="text-muted-foreground">—</span>;
   }
 
-  const visible = expanded ? keywords : keywords.slice(0, 3);
-  const remaining = keywords.length - visible.length;
-
   return (
-    <div className="space-y-1">
-      <ul className="space-y-0.5">
-        {visible.map((keyword) => (
-          <li key={keyword.question}>
-            <Link
-              to="/p/$projectId/prompt-explorer"
-              params={{ projectId }}
-              search={{ q: keyword.question, hb: brand || undefined }}
-              className="group/kw inline-flex items-baseline gap-2 text-xs"
-              title="在提示词探索中运行"
+    <ExpandableList
+      items={keywords}
+      className="space-y-0.5"
+      renderItem={(keyword) => (
+        <li key={keyword.question}>
+          <Link
+            to="/p/$projectId/prompt-explorer"
+            params={{ projectId }}
+            search={{ q: keyword.question, hb: brand || undefined }}
+            className="group/kw inline-flex items-baseline gap-2 text-xs"
+            title="在提示词探索中运行"
+          >
+            <span className="text-foreground/80 group-hover/kw:underline">
+              {keyword.question}
+            </span>
+            <span
+              className="shrink-0 text-muted-foreground tabular-nums"
+              title="已获取样本中的提示词搜索量"
             >
-              <span className="text-base-content/80 group-hover/kw:underline">
-                {keyword.question}
-              </span>
-              <span
-                className="shrink-0 tabular-nums text-base-content/40"
-                title="已获取样本中的提示词搜索量"
-              >
-                {formatCount(keyword.aiSearchVolume)} vol.
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-      {keywords.length > 3 ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((current) => !current)}
-          className="text-xs text-base-content/50 hover:text-base-content"
-        >
-          {expanded ? "收起" : `+${remaining} more`}
-        </button>
-      ) : null}
-    </div>
+              {formatCount(keyword.aiSearchVolume)} 搜索量
+            </span>
+          </Link>
+        </li>
+      )}
+    />
   );
 }
+
+const TEXT_CELL = "min-w-80 max-w-2xl align-top";
+const NUMBER_CELL = "whitespace-nowrap text-right align-top";
 
 const pagesHelper = createColumnHelper<TopPageRow>();
 const queriesHelper = createColumnHelper<TopQueryRow>();
@@ -193,6 +187,7 @@ export function buildTopPagesColumns({
   return [
     pagesHelper.accessor("url", {
       id: "url",
+      meta: { cellClassName: TEXT_CELL },
       header: () => (
         <HeaderWithHelp
           label="来源"
@@ -208,6 +203,7 @@ export function buildTopPagesColumns({
       ? [
           pagesHelper.accessor("platform", {
             id: "platform",
+            meta: { cellClassName: "whitespace-nowrap align-top" },
             header: () => (
               <HeaderWithHelp label="平台" helpText={PLATFORM_HELP} />
             ),
@@ -218,6 +214,7 @@ export function buildTopPagesColumns({
       : []),
     pagesHelper.display({
       id: "keywords",
+      meta: { cellClassName: "max-w-lg align-top" },
       header: () => (
         <HeaderWithHelp
           label="引用场景"
@@ -234,6 +231,7 @@ export function buildTopPagesColumns({
     }),
     pagesHelper.accessor("capturedVolume", {
       id: "capturedVolume",
+      meta: { cellClassName: NUMBER_CELL },
       header: ({ column }) => (
         <SortableHeader
           column={column}
@@ -263,9 +261,10 @@ export function buildTopQueriesColumns({
   return [
     queriesHelper.accessor("question", {
       id: "question",
+      meta: { cellClassName: TEXT_CELL },
       header: () => (
         <HeaderWithHelp
-          label="查询"
+          label="查询词"
           helpText="AI 回答正文或来源中引用了所查品牌或域名的用户提示词样本。提示词本身可能没有出现该品牌。"
         />
       ),
@@ -274,8 +273,8 @@ export function buildTopQueriesColumns({
         <>
           <p className="break-words font-medium">{row.original.question}</p>
           {row.original.brandsMentioned.length > 0 ? (
-            <p className="mt-0.5 text-xs text-base-content/50">
-              品牌： {row.original.brandsMentioned.slice(0, 5).join(", ")}
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              品牌：{row.original.brandsMentioned.slice(0, 5).join(", ")}
             </p>
           ) : null}
         </>
@@ -285,6 +284,7 @@ export function buildTopQueriesColumns({
       ? [
           queriesHelper.accessor("platform", {
             id: "platform",
+            meta: { cellClassName: "whitespace-nowrap align-top" },
             header: () => (
               <HeaderWithHelp label="平台" helpText={PLATFORM_HELP} />
             ),
@@ -295,6 +295,7 @@ export function buildTopQueriesColumns({
       : []),
     queriesHelper.accessor("aiSearchVolume", {
       id: "aiSearchVolume",
+      meta: { cellClassName: NUMBER_CELL },
       header: ({ column }) => (
         <SortableHeader
           column={column}
@@ -314,96 +315,30 @@ export function buildTopQueriesColumns({
       header: () => <span className="sr-only">操作</span>,
       meta: { cellClassName: "w-px whitespace-nowrap text-right align-top" },
       cell: ({ row }) => (
-        <span
-          className="tooltip tooltip-left opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100"
-          data-tip="在提示词探索中运行此提示词"
-        >
-          <Link
-            to="/p/$projectId/prompt-explorer"
-            params={{ projectId }}
-            search={{ q: row.original.question, hb: brand || undefined }}
-            className="btn btn-ghost btn-xs gap-1"
-            aria-label="在提示词探索中运行"
+        <Tooltip>
+          <TooltipTrigger
+            delay={150}
+            render={
+              <Link
+                to="/p/$projectId/prompt-explorer"
+                params={{ projectId }}
+                search={{ q: row.original.question, hb: brand || undefined }}
+                className={buttonVariants({
+                  variant: "ghost",
+                  size: "icon-xs",
+                  className: "text-muted-foreground",
+                })}
+                aria-label="在提示词探索中运行"
+              />
+            }
           >
-            <Sparkles className="size-3.5" />
-          </Link>
-        </span>
+            <Sparkles />
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            在提示词探索中运行此提示词
+          </TooltipContent>
+        </Tooltip>
       ),
     }),
   ];
-}
-
-export function TopPagesTable({
-  table,
-  emptyMessage = "暂无可显示的引用来源。",
-}: {
-  table: Table<TopPageRow>;
-  emptyMessage?: string;
-}) {
-  if (table.getRowModel().rows.length === 0) {
-    return (
-      <p className="p-6 text-center text-sm text-base-content/60">
-        {emptyMessage}
-      </p>
-    );
-  }
-
-  return <BrandLookupTable table={table} urlLikeColumnId="url" />;
-}
-
-export function TopQueriesTable({
-  table,
-  emptyMessage = "未找到匹配的查询。",
-}: {
-  table: Table<TopQueryRow>;
-  emptyMessage?: string;
-}) {
-  if (table.getRowModel().rows.length === 0) {
-    return (
-      <p className="p-6 text-center text-sm text-base-content/60">
-        {emptyMessage}
-      </p>
-    );
-  }
-
-  return <BrandLookupTable table={table} urlLikeColumnId="question" />;
-}
-
-function BrandLookupTable<T>({
-  table,
-  urlLikeColumnId,
-}: {
-  table: Table<T>;
-  urlLikeColumnId: string;
-}) {
-  return (
-    <AppDataTable
-      table={table}
-      getRowClassName={() => "group transition-colors hover:bg-base-200/40"}
-      getCellClassName={(_, columnId) =>
-        cellClassName(
-          columnId,
-          urlLikeColumnId,
-          table.getColumn(columnId)?.getCanSort() ?? false,
-        )
-      }
-    />
-  );
-}
-
-function cellClassName(
-  columnId: string,
-  urlLikeColumnId: string,
-  isNumeric: boolean,
-): string {
-  if (columnId === urlLikeColumnId) {
-    return "min-w-80 max-w-2xl align-top";
-  }
-  if (columnId === "keywords") {
-    return "max-w-lg align-top";
-  }
-  if (isNumeric) {
-    return "whitespace-nowrap text-right align-top";
-  }
-  return "whitespace-nowrap align-top";
 }

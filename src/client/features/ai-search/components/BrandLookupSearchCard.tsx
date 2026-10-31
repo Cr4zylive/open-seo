@@ -1,8 +1,10 @@
 import type { FormEvent } from "react";
-import { Search } from "lucide-react";
 import { isHostedClientAuthMode } from "@/lib/auth-mode";
 import { applyBillingMarkupUsd } from "@/shared/billing";
 import { ResearchScopeSelect } from "@/client/components/ResearchScopeSelect";
+import { SearchCard, SearchInput } from "@/client/components/SearchCard";
+import { Field, FieldDescription } from "@/client/components/ui/field";
+import { Input } from "@/client/components/ui/input";
 import type { ResearchScope } from "@/shared/researchScope";
 import { BRAND_LOOKUP_MAX_INPUT_LENGTH } from "@/types/schemas/ai-search";
 
@@ -61,93 +63,64 @@ export function BrandLookupSearchCard({
   const competitorsError = validationError?.field === "competitors";
 
   return (
-    <div className="card border border-base-300 bg-base-100">
-      <div className="card-body gap-4">
-        <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <label
-              className={`input input-bordered flex flex-1 items-center gap-2 ${
-                queryError ? "input-error" : ""
-              }`}
-            >
-              <Search className="size-4 text-base-content/60" />
-              <input
-                type="text"
-                placeholder="输入品牌名称或域名"
-                value={query}
-                maxLength={BRAND_LOOKUP_MAX_INPUT_LENGTH}
-                onChange={(event) => onQueryChange(event.target.value)}
-                aria-invalid={queryError || undefined}
-                aria-describedby={
-                  queryError ? "brand-lookup-input-error" : undefined
-                }
-                autoComplete="off"
-                spellCheck={false}
-                className="grow"
-              />
-            </label>
-
-            <ResearchScopeSelect
-              value={scope}
-              onChange={onScopeChange}
-              disabledReason={scopeDisabledReason}
-            />
-
-            <button
-              type="submit"
-              className="btn btn-primary shrink-0 px-6"
-              disabled={isLoading}
-            >
-              {isLoading ? "查询中…" : "查询"}
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <input
-              type="text"
+    <SearchCard
+      onSubmit={onSubmit}
+      pending={isLoading}
+      error={validationError?.message}
+      errorId="brand-lookup-input-error"
+      secondRow={
+        <>
+          <Field>
+            <Input
               placeholder="添加竞争对手（用逗号分隔）"
               value={competitors}
               onChange={(event) => onCompetitorsChange(event.target.value)}
               autoComplete="off"
               spellCheck={false}
-              className={`input input-bordered w-full ${
-                competitorsError ? "input-error" : ""
-              }`}
               aria-label="竞争对手"
               aria-invalid={competitorsError || undefined}
               aria-describedby={
                 competitorsError ? "brand-lookup-input-error" : undefined
               }
             />
-            <p className="text-xs text-base-content/60">
-              最多添加 5 个竞争品牌或域名，查看 AI 声量份额。
-            </p>
-          </div>
-        </form>
-
-        {validationError ? (
-          <p id="brand-lookup-input-error" className="text-sm text-error">
-            {validationError.message}
-          </p>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-3 text-xs text-base-content/60">
-          <p className="tabular-nums">
-            预计{" "}
-            <span className="font-medium text-base-content/80">
+            <FieldDescription>
+              最多添加 5 个竞争对手品牌或域名，查看声量份额。
+            </FieldDescription>
+          </Field>
+          <p className="text-xs text-muted-foreground tabular-nums">
+            约{" "}
+            <span className="font-medium text-foreground">
               ${BRAND_LOOKUP_DISPLAYED_COST_USD.toFixed(2)}
             </span>
             {hasCompetitors ? (
               <span>
                 {" "}
-                ，另加约 $
-                {BRAND_LOOKUP_COMPETITOR_DISPLAYED_COST_USD.toFixed(2)}{" "}
-                用于竞争对手对比
+                ，对比竞争对手另约 $
+                {BRAND_LOOKUP_COMPETITOR_DISPLAYED_COST_USD.toFixed(2)}
               </span>
             ) : null}
           </p>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <SearchInput
+        placeholder="输入品牌名称或域名"
+        aria-label="品牌名称或域名"
+        value={query}
+        maxLength={BRAND_LOOKUP_MAX_INPUT_LENGTH}
+        onChange={(event) => onQueryChange(event.target.value)}
+        aria-invalid={queryError || undefined}
+        aria-describedby={queryError ? "brand-lookup-input-error" : undefined}
+        autoComplete="off"
+        spellCheck={false}
+      />
+
+      <ResearchScopeSelect
+        value={scope}
+        className="w-full lg:w-40"
+        onChange={onScopeChange}
+        disabledReason={scopeDisabledReason}
+      />
+    </SearchCard>
   );
 }

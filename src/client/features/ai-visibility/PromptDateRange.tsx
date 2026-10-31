@@ -1,0 +1,128 @@
+import { CalendarDays } from "lucide-react";
+import { Input } from "@/client/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/client/components/ui/select";
+
+export enum PromptRange {
+  Last7 = "last_7_days",
+  Last28 = "last_28_days",
+  Last90 = "last_90_days",
+  All = "all",
+  Custom = "custom",
+}
+
+interface PromptPeriod {
+  preset: PromptRange;
+  start: string;
+  end: string;
+}
+
+const options = [
+  { value: PromptRange.Last7, label: "最近 7 天" },
+  { value: PromptRange.Last28, label: "最近 28 天" },
+  { value: PromptRange.Last90, label: "最近 90 天" },
+  { value: PromptRange.All, label: "全部历史" },
+  { value: PromptRange.Custom, label: "自定义范围" },
+];
+
+function localDate(value: Date) {
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, "0"),
+    String(value.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+export function promptPeriod(preset = PromptRange.Last28): PromptPeriod {
+  const end = new Date();
+  const start = new Date(end);
+  const days =
+    preset === PromptRange.Last7 ? 7 : preset === PromptRange.Last90 ? 90 : 28;
+  start.setDate(start.getDate() - days + 1);
+  return { preset, start: localDate(start), end: localDate(end) };
+}
+
+export function inPromptPeriod(createdAt: string, period: PromptPeriod) {
+  if (period.preset === PromptRange.All) return true;
+  if (!period.start || !period.end || period.start > period.end) return false;
+  const end = new Date(`${period.end}T00:00:00`);
+  end.setDate(end.getDate() + 1);
+  const time = new Date(createdAt).getTime();
+  return (
+    time >= new Date(`${period.start}T00:00:00`).getTime() &&
+    time < end.getTime()
+  );
+}
+
+export function PromptDateRange({
+  value,
+  onChange,
+}: {
+  value: PromptPeriod;
+  onChange: (period: PromptPeriod) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select
+        items={options}
+        value={value.preset}
+        onValueChange={(next) => {
+          const option = options.find((item) => item.value === next);
+          if (option)
+            onChange(
+              option.value === PromptRange.Custom
+                ? { ...value, preset: option.value }
+                : promptPeriod(option.value),
+            );
+        }}
+      >
+        <SelectTrigger size="sm" aria-label="分析日期范围">
+          <CalendarDays className="size-3.5" />
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {value.preset === PromptRange.Custom && (
+        <>
+          <Input
+            type="date"
+            aria-label="开始日期"
+            className="h-7 w-36 text-xs"
+            value={value.start}
+            max={value.end || undefined}
+            onChange={(event) =>
+              onChange({ ...value, start: event.target.value })
+            }
+          />
+          <span className="text-xs text-muted-foreground">至</span>
+          <Input
+            type="date"
+            aria-label="结束日期"
+            className="h-7 w-36 text-xs"
+            value={value.end}
+            min={value.start || undefined}
+            onChange={(event) =>
+              onChange({ ...value, end: event.target.value })
+            }
+          />
+          {(!value.start || !value.end || value.start > value.end) && (
+            <p role="alert" className="w-full text-xs text-destructive">
+              开始日期需早于或等于结束日期。
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
