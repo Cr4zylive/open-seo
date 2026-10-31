@@ -25,7 +25,8 @@ subscribe("chat", (event) => {
 
 // OpenRouter (with usage accounting on) reports the real USD cost of each
 // response under providerMetadata.openrouter.usage.cost. Used by SAM to meter
-// LLM spend against the credit pool.
+// LLM spend against the credit pool. A custom OpenAI-compatible endpoint
+// (CHAT_BASE_URL) does not send this metadata, so its cost reads as 0.
 const openRouterUsageSchema = z.object({
   openrouter: z.object({ usage: z.object({ cost: z.number() }) }),
 });

@@ -32,4 +32,12 @@ Search Console is optional and works in self-hosted deployments using your own G
 
 ### AI features (SAM)
 
-AI features like SAM, the in-app SEO agent, are optional. Set the `OPENROUTER_API_KEY` environment variable to enable them. Create a key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys).
+SAM, the in-app SEO agent, is optional. Configure it in the app after it is running: open Settings and save three fields.
+
+- **Chat Base URL.** Leave this empty to use [OpenRouter](https://openrouter.ai/settings/keys). For another OpenAI-compatible API, include `/v1`, for example `https://api.ooapi.cc/v1`.
+- **Chat API Key.** The OpenRouter key, or that gateway's own key.
+- **Model id.** The id the gateway expects.
+
+The model has to support OpenAI-style tool calls, because SAM uses tools. A custom endpoint does not return OpenRouter's usage cost, so that spend is recorded as 0. You pay the chat provider directly.
+
+Environment variables (`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `CHAT_BASE_URL`) apply only until those settings are saved.

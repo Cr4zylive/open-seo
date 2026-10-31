@@ -7,8 +7,8 @@ import { getSamAccessSetupStatus } from "@/serverFunctions/samAccess";
 type SamAccess = {
   // Only true once the setup check has resolved to "no access". It stays false
   // while the check is in flight, so the chat renders immediately instead of
-  // blocking behind a skeleton — the gate only replaces it if we confirm the
-  // OpenRouter key is missing.
+  // blocking behind a skeleton — the gate only replaces it if we confirm no
+  // chat provider (OpenRouter key or CHAT_BASE_URL) is configured.
   showSetupGate: boolean;
   errorMessage: string | null;
   isRefetching: boolean;

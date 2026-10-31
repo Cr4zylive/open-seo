@@ -33,7 +33,7 @@ Optional env values:
 - `ALLOWED_HOST` (single reverse-proxy hostname to allow in Vite preview)
 - `AUTH_MODE=local_noauth` (already set in compose)
 - `OPEN_SEO_IMAGE` (defaults to `ghcr.io/every-app/open-seo:latest`)
-- `OPENROUTER_API_KEY` (required for AI features such as SAM; see [OpenRouter](https://openrouter.ai/settings/keys))
+- `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `CHAT_BASE_URL` (optional fallback until chat settings are saved in the app)
 
 If you are putting Docker behind a reverse proxy or a temporary tunnel, remember that Docker self-hosting runs with app auth disabled. Only expose it behind your own auth-protected reverse proxy, tunnel, or private network, and add the public hostname before restarting:
 
@@ -42,6 +42,18 @@ ALLOWED_HOST=yourdomain.com docker compose up -d
 ```
 
 You can also persist it in `.env`.
+
+## AI features (SAM)
+
+Open the app and go to Settings (or the chat-model help page). Save:
+
+- Chat Base URL. Leave it empty to use OpenRouter. For an OpenAI-compatible gateway, include `/v1`, for example `https://api.ooapi.cc/v1`.
+- Chat API Key. This is the OpenRouter key, or that gateway's own key.
+- Model id. The id the gateway expects.
+
+The model needs OpenAI-style tool calling, because SAM calls tools. A custom endpoint does not return OpenRouter usage cost, so that spend is recorded as 0. Saving applies on the next chat turn.
+
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `CHAT_BASE_URL` (alias `OPENROUTER_BASE_URL`) are only used when nothing has been saved in the app yet.
 
 ## Telemetry
 

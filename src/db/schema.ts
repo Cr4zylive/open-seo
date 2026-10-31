@@ -90,6 +90,7 @@ export const {
   auditIssues,
   auditLighthouseResults,
   samSessions,
+  chatProviderSettings,
   user,
   session,
   account,

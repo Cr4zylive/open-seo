@@ -1,4 +1,5 @@
 import { AUTH_MODES } from "@/lib/auth-mode";
+import { selectChatBaseUrl } from "@/shared/chat-base-url";
 import {
   looksLikeDataForSeoKey,
   MIN_BETTER_AUTH_SECRET_LENGTH,
@@ -195,22 +196,38 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
     });
   }
 
-  items.push(
-    get(env, "OPENROUTER_API_KEY")
-      ? {
-          key: "ai",
-          name: "AI features",
-          level: "ok",
-          message: "OPENROUTER_API_KEY set",
-        }
-      : {
-          key: "ai",
-          name: "AI features",
-          level: "info",
-          message:
-            "OPENROUTER_API_KEY not set (optional) — SAM, the in-app SEO agent, is disabled.",
-        },
+  const chatBaseUrl = selectChatBaseUrl(
+    get(env, "CHAT_BASE_URL"),
+    get(env, "OPENROUTER_BASE_URL"),
   );
+  if (chatBaseUrl) {
+    items.push({
+      key: "ai",
+      name: "AI features",
+      level: get(env, "OPENROUTER_MODEL") ? "ok" : "warn",
+      message: get(env, "OPENROUTER_MODEL")
+        ? "Env chat endpoint is set. It is used only until chat settings are saved in the app."
+        : "Env chat endpoint is set without OPENROUTER_MODEL. Save the model id in the app settings, or SAM sends the OpenRouter default slug until then.",
+    });
+  } else {
+    items.push(
+      get(env, "OPENROUTER_API_KEY")
+        ? {
+            key: "ai",
+            name: "AI features",
+            level: "ok",
+            message:
+              "OPENROUTER_API_KEY set (used until chat settings are saved in the app).",
+          }
+        : {
+            key: "ai",
+            name: "AI features",
+            level: "info",
+            message:
+              "No chat provider in the environment. Configure SAM in the app settings. These env vars are only a fallback before the first save.",
+          },
+    );
+  }
 }
 
 // Shared per-feature checks: the Docker preflight prints these at boot and

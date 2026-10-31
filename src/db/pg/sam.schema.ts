@@ -6,6 +6,16 @@ import { projects } from "./app.schema";
 // See src/db/pg/app.schema.ts for why timestamps are ISO-8601 UTC text.
 const isoNow = sql`to_char(now() AT TIME ZONE 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
+// One installation-wide row (id "default"). Absent until someone saves the
+// in-app chat settings. Empty base_url means OpenRouter.
+export const chatProviderSettings = pgTable("chat_provider_settings", {
+  id: text("id").primaryKey(),
+  baseUrl: text("base_url").notNull().default(""),
+  apiKey: text("api_key").notNull().default(""),
+  modelId: text("model_id").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(isoNow),
+});
+
 // One row per SAM chat session. The conversation history itself lives in the
 // SamChatAgent Durable Object's SQLite (keyed by this id); this table is the
 // listable registry the session side-panel reads from, and the project/user

@@ -55,10 +55,17 @@ declare namespace Cloudflare {
     // DataForSEO API Basic auth value (base64 of login:password)
     DATAFORSEO_API_KEY: string;
 
-    // OpenRouter API key for the SAM in-app chat agent.
+    // Bearer token for the SAM chat agent. An OpenRouter key by default.
+    // When CHAT_BASE_URL is set, this is that provider's API key instead.
     OPENROUTER_API_KEY?: string;
-    // Optional OpenRouter model slug override (defaults in openrouter.ts).
+    // Model id sent to the chat endpoint. OpenRouter slug by default; a
+    // custom gateway's own model id when CHAT_BASE_URL is set.
     OPENROUTER_MODEL?: string;
+    // OpenAI-compatible chat base URL (include /v1), e.g.
+    // https://api.ooapi.cc/v1. Unset keeps the OpenRouter default.
+    CHAT_BASE_URL?: string;
+    // Alias of CHAT_BASE_URL. CHAT_BASE_URL wins when both are set.
+    OPENROUTER_BASE_URL?: string;
   }
 }
 
