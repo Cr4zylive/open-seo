@@ -2,26 +2,41 @@ import {
   createOpenRouter,
   type LanguageModelV3,
 } from "@openrouter/ai-sdk-provider";
+import { selectChatBaseUrl } from "@/shared/chat-base-url";
+import { getEnvValueSync } from "@/server/lib/runtime-env";
 
 // OpenRouter model slug used for the SAM in-app chat agent. Override with
-// OPENROUTER_MODEL to swap models without a code change.
+// OPENROUTER_MODEL to swap models without a code change. The same variable
+// is the model id sent to a custom OpenAI-compatible gateway.
 const DEFAULT_CHAT_AGENT_MODEL = "openai/gpt-5.6-luna";
 
 // Previous default; kept reachable via OPENROUTER_MODEL for rollback. Its
-// routing needs the ZDR/provider tuning below.
+// routing needs the ZDR/provider tuning below — OpenRouter only.
 const MINIMAX_M3 = "minimax/minimax-m3";
 
+// createOpenRouter refuses an empty apiKey. Local OpenAI-compatible servers
+// usually ignore Authorization, so a custom base URL with no
+// OPENROUTER_API_KEY still gets a bearer they can discard.
+const CUSTOM_ENDPOINT_BEARER_FALLBACK = "local";
+
 /**
- * Returns the AI SDK LanguageModel for the chat agent. `usage: { include: true }`
- * turns on OpenRouter usage accounting so each response carries its real USD
- * cost (providerMetadata.openrouter.usage.cost) — which we meter against the
- * shared usage-credit pool.
+ * Returns the AI SDK LanguageModel for the chat agent.
  *
- * Default model: GPT-5.6 Luna at `reasoning.effort: "max"` — "max" is valid at
- * the OpenRouter API for GPT-5.x but missing from the SDK's effort union, so
- * the reasoning config rides in `extraBody`. Reasoning tokens stream on the
- * separate reasoning channel and are billed as output tokens, which the usage
- * accounting above captures.
+ * OpenRouter (no custom base URL): `usage: { include: true }` turns on usage
+ * accounting so each response carries its real USD cost
+ * (providerMetadata.openrouter.usage.cost), which we meter against the shared
+ * usage-credit pool. Default model is GPT-5.6 Luna at `reasoning.effort:
+ * "max"` — "max" is valid at the OpenRouter API for GPT-5.x but missing from
+ * the SDK's effort union, so the reasoning config rides in `extraBody`.
+ *
+ * Custom base URL (`CHAT_BASE_URL`, or `OPENROUTER_BASE_URL` as an alias):
+ * the same provider is pointed at that OpenAI-compatible `/v1` origin
+ * (`POST {baseURL}/chat/completions`) with `compatibility: "compatible"`.
+ * Usage accounting, provider order/ZDR/fallbacks, and the OpenRouter
+ * reasoning channel are omitted — a generic gateway does not honor them, and
+ * cost metering reads as 0 because no OpenRouter usage cost comes back.
+ * `OPENROUTER_API_KEY` is the Bearer token (the provider's own key).
+ * `OPENROUTER_MODEL` is the model id that gateway expects.
  *
  * Sync on purpose: Think's `getModel()` hook is sync and runs on every turn,
  * so the SAM agent reads the key/model from its DO env and builds here.
@@ -30,8 +45,19 @@ export function buildChatAgentModel(
   apiKey: string,
   modelId?: string,
   reasoningEffort: "max" | "low" = "max",
+  baseURL?: string,
 ): LanguageModelV3 {
   const model = modelId ?? DEFAULT_CHAT_AGENT_MODEL;
+  const endpoint = baseURL?.trim();
+  if (endpoint) {
+    const bearer = apiKey.trim() || CUSTOM_ENDPOINT_BEARER_FALLBACK;
+    return createOpenRouter({
+      apiKey: bearer,
+      baseURL: endpoint,
+      compatibility: "compatible",
+    })(model);
+  }
+
   const openrouter = createOpenRouter({ apiKey });
 
   // MiniMax M3 (env-override path only): `provider.order` prefers Together,
@@ -58,4 +84,27 @@ export function buildChatAgentModel(
     usage: { include: true },
     extraBody: { reasoning: { effort: reasoningEffort } },
   });
+}
+
+// Think's getModel() is sync, so the SAM agent passes its DO env here.
+export function buildChatAgentModelFromEnv(
+  env: object,
+  reasoningEffort: "max" | "low" = "max",
+): LanguageModelV3 {
+  const baseURL = selectChatBaseUrl(
+    getEnvValueSync(env, "CHAT_BASE_URL"),
+    getEnvValueSync(env, "OPENROUTER_BASE_URL"),
+  );
+  const apiKey = getEnvValueSync(env, "OPENROUTER_API_KEY");
+  // A custom endpoint can run without a key (the builder sends a placeholder
+  // bearer). OpenRouter still requires one.
+  if (!apiKey && !baseURL) {
+    throw new Error("OPENROUTER_API_KEY is required for the SAM agent");
+  }
+  return buildChatAgentModel(
+    apiKey ?? "",
+    getEnvValueSync(env, "OPENROUTER_MODEL"),
+    reasoningEffort,
+    baseURL,
+  );
 }

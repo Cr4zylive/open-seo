@@ -16,7 +16,10 @@ function OpenrouterApiKeyHelpPage() {
             <p className="text-sm text-base-content/70">
               OpenSEO 的应用内 SEO 智能体 SAM 等 AI 功能需要
               <code className="mx-1">OPENROUTER_API_KEY</code>
-              密钥。此项为可选配置，其他功能无需该密钥即可使用。
+              密钥。此项为可选配置，其他功能无需该密钥即可使用。自托管也可以把
+              <code className="mx-1">CHAT_BASE_URL</code>
+              指到任意 OpenAI 兼容接口，此时这个变量是该服务的 API 密钥，而不是
+              OpenRouter 密钥。
             </p>
           </div>
         </div>
@@ -95,6 +98,32 @@ function OpenrouterApiKeyHelpPage() {
               <code>npx wrangler secret put OPENROUTER_API_KEY</code>
             </pre>
             <p>出现提示后粘贴 OpenRouter API 密钥。</p>
+          </div>
+        </div>
+
+        <div className="card bg-base-100 border border-base-300">
+          <div className="card-body gap-3 text-sm text-base-content/75">
+            <h2 className="card-title text-base">使用其他 OpenAI 兼容接口</h2>
+            <p>
+              自托管可以把 SAM 指到任意 OpenAI 兼容接口。Docker 写在{" "}
+              <code>.env</code>，Cloudflare 自托管写在{" "}
+              <code>.env.selfhost</code> 后重新部署：
+            </p>
+            <pre className="p-3 rounded bg-base-200 border border-base-300 overflow-x-auto text-xs">
+              <code>{`CHAT_BASE_URL=https://api.ooapi.cc/v1
+OPENROUTER_API_KEY=该服务的 API 密钥
+OPENROUTER_MODEL=该网关要求的模型 id`}</code>
+            </pre>
+            <p>
+              <code>CHAT_BASE_URL</code> 需要包含 <code>/v1</code>。
+              <code className="mx-1">OPENROUTER_BASE_URL</code>
+              是同一设置的别名，两个都填时以 <code>CHAT_BASE_URL</code> 为准。
+              <code className="mx-1">OPENROUTER_MODEL</code>
+              会作为请求里的模型 id 发给该网关。模型需要支持 OpenAI
+              风格的工具调用，SAM 会调用工具。自定义接口不会返回 OpenRouter
+              的用量费用，这笔花费按 0 记录。不设置 base URL 时仍然走
+              OpenRouter。
+            </p>
           </div>
         </div>
       </div>

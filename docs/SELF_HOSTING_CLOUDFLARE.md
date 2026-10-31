@@ -50,6 +50,16 @@ Copy the template and fill in the required values:
 cp .env.selfhost.example .env.selfhost
 ```
 
+SAM is optional. Set `OPENROUTER_API_KEY` for OpenRouter, or point SAM at any OpenAI-compatible chat API:
+
+```bash
+CHAT_BASE_URL=https://api.ooapi.cc/v1
+OPENROUTER_API_KEY=your-provider-api-key
+OPENROUTER_MODEL=the-model-id-that-gateway-expects
+```
+
+`OPENROUTER_API_KEY` is the Bearer token (the provider's own key when `CHAT_BASE_URL` is set). `OPENROUTER_MODEL` is the model id that gateway expects. `OPENROUTER_BASE_URL` is an alias for `CHAT_BASE_URL`. Leave both base URLs empty to keep OpenRouter. The model needs OpenAI-style tool calling. A custom endpoint does not report OpenRouter usage cost, so that spend stays 0. Redeploy after changing `.env.selfhost`.
+
 ## 4) Deploy
 
 ```bash

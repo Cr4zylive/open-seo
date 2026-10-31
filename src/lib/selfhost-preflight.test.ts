@@ -85,6 +85,27 @@ describe("runSelfhostPreflight", () => {
     expect(item?.message).not.toContain("BETTER_AUTH_SECRET,");
   });
 
+  it("treats a custom chat base URL as configured AI, and warns without a model id", () => {
+    const configured = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      CHAT_BASE_URL: "https://api.ooapi.cc/v1",
+      OPENROUTER_MODEL: "gpt-4o-mini",
+    });
+    expect(itemFor(configured, "AI features")?.level).toBe("ok");
+    expect(itemFor(configured, "AI features")?.message).toContain(
+      "Custom chat endpoint",
+    );
+
+    const missingModel = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      OPENROUTER_BASE_URL: "https://api.ooapi.cc/v1",
+    });
+    expect(itemFor(missingModel, "AI features")?.level).toBe("warn");
+    expect(itemFor(missingModel, "AI features")?.message).toContain(
+      "OPENROUTER_MODEL",
+    );
+  });
+
   it("mentions ALLOWED_HOST when unset", () => {
     const result = runSelfhostPreflight({ AUTH_MODE: "local_noauth" });
 

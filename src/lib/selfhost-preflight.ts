@@ -1,4 +1,5 @@
 import { AUTH_MODES } from "@/lib/auth-mode";
+import { selectChatBaseUrl } from "@/shared/chat-base-url";
 import {
   looksLikeDataForSeoKey,
   MIN_BETTER_AUTH_SECRET_LENGTH,
@@ -195,22 +196,37 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
     });
   }
 
-  items.push(
-    get(env, "OPENROUTER_API_KEY")
-      ? {
-          key: "ai",
-          name: "AI features",
-          level: "ok",
-          message: "OPENROUTER_API_KEY set",
-        }
-      : {
-          key: "ai",
-          name: "AI features",
-          level: "info",
-          message:
-            "OPENROUTER_API_KEY not set (optional) — SAM, the in-app SEO agent, is disabled.",
-        },
+  const chatBaseUrl = selectChatBaseUrl(
+    get(env, "CHAT_BASE_URL"),
+    get(env, "OPENROUTER_BASE_URL"),
   );
+  if (chatBaseUrl) {
+    items.push({
+      key: "ai",
+      name: "AI features",
+      level: get(env, "OPENROUTER_MODEL") ? "ok" : "warn",
+      message: get(env, "OPENROUTER_MODEL")
+        ? "Custom chat endpoint configured. OPENROUTER_API_KEY is the Bearer token (a placeholder is sent if it is unset). OPENROUTER_MODEL is the model id."
+        : "Custom chat endpoint is set, but OPENROUTER_MODEL is empty. Set it to the model id that endpoint expects, or SAM sends the OpenRouter default slug.",
+    });
+  } else {
+    items.push(
+      get(env, "OPENROUTER_API_KEY")
+        ? {
+            key: "ai",
+            name: "AI features",
+            level: "ok",
+            message: "OPENROUTER_API_KEY set",
+          }
+        : {
+            key: "ai",
+            name: "AI features",
+            level: "info",
+            message:
+              "OPENROUTER_API_KEY not set (optional) — SAM, the in-app SEO agent, is disabled. Set CHAT_BASE_URL to use an OpenAI-compatible endpoint instead.",
+          },
+    );
+  }
 }
 
 // Shared per-feature checks: the Docker preflight prints these at boot and

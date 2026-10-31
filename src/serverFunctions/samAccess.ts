@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { selectChatBaseUrl } from "@/shared/chat-base-url";
 import {
   getOptionalEnvValue,
   isHostedServerAuthMode,
@@ -7,7 +8,7 @@ import {
 import { requireProjectContext } from "@/serverFunctions/middleware";
 
 const OPENROUTER_KEY_MISSING_MESSAGE =
-  "当前部署尚未设置 OPENROUTER_API_KEY。请将其添加到环境变量，重启 OpenSEO 后在此确认。";
+  "当前部署尚未设置 OPENROUTER_API_KEY，也没有自定义聊天接口（CHAT_BASE_URL）。请配置其一后重启 OpenSEO，再在此确认。";
 
 const projectScopedSchema = z.object({ projectId: z.string().min(1) });
 
@@ -16,9 +17,9 @@ type SamAccessStatus = {
   errorMessage: string | null;
 };
 
-// Gates the in-app AI agent (SAM) on an OpenRouter key being configured, the
-// same way backlinks/AI-search gate on their DataForSEO subscriptions. Hosted
-// deployments always have the key provisioned, so only self-hosted is checked.
+// Gates the in-app AI agent (SAM) on a chat provider being configured: an
+// OpenRouter key, or a custom OpenAI-compatible base URL. Hosted deployments
+// always have the key provisioned, so only self-hosted is checked.
 export const getSamAccessSetupStatus = createServerFn({ method: "GET" })
   .middleware(requireProjectContext)
   .validator(projectScopedSchema)
@@ -27,7 +28,13 @@ export const getSamAccessSetupStatus = createServerFn({ method: "GET" })
       return { enabled: true, errorMessage: null };
     }
 
-    const enabled = Boolean(await getOptionalEnvValue("OPENROUTER_API_KEY"));
+    const baseURL = selectChatBaseUrl(
+      await getOptionalEnvValue("CHAT_BASE_URL"),
+      await getOptionalEnvValue("OPENROUTER_BASE_URL"),
+    );
+    const enabled = Boolean(
+      (await getOptionalEnvValue("OPENROUTER_API_KEY")) || baseURL,
+    );
     return {
       enabled,
       errorMessage: enabled ? null : OPENROUTER_KEY_MISSING_MESSAGE,

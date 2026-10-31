@@ -32,4 +32,14 @@ Search Console is optional and works in self-hosted deployments using your own G
 
 ### AI features (SAM)
 
-AI features like SAM, the in-app SEO agent, are optional. Set the `OPENROUTER_API_KEY` environment variable to enable them. Create a key at [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys).
+SAM, the in-app SEO agent, is optional. By default it calls [OpenRouter](https://openrouter.ai/settings/keys). Set `OPENROUTER_API_KEY` to a key from that page.
+
+To use another OpenAI-compatible chat API, set `CHAT_BASE_URL` to that API's base URL, including `/v1`. `OPENROUTER_API_KEY` is still the Bearer token: for a custom endpoint it is that provider's API key, not an OpenRouter key. `OPENROUTER_MODEL` is the model id the gateway expects. `OPENROUTER_BASE_URL` is an alias for `CHAT_BASE_URL`. Leave both base URLs unset to keep OpenRouter.
+
+```bash
+CHAT_BASE_URL=https://api.ooapi.cc/v1
+OPENROUTER_API_KEY=your-provider-api-key
+OPENROUTER_MODEL=the-model-id-that-gateway-expects
+```
+
+Docker reads these from `.env`. Cloudflare self-hosting reads them from `.env.selfhost` (redeploy after changing them). The model has to support OpenAI-style tool calls, because SAM uses tools. A custom endpoint does not return OpenRouter's usage cost, so that spend is recorded as 0. You pay the chat provider directly.

@@ -272,6 +272,10 @@ const dataEnv = {
   GOOGLE_CLIENT_SECRET: optionalSecret("GOOGLE_CLIENT_SECRET"),
   OPENROUTER_API_KEY: optionalSecret("OPENROUTER_API_KEY"),
   OPENROUTER_MODEL: optionalVar("OPENROUTER_MODEL"),
+  // Self-host: point SAM at an OpenAI-compatible /v1 endpoint. Hosted SaaS
+  // leaves both empty and stays on OpenRouter.
+  CHAT_BASE_URL: optionalVar("CHAT_BASE_URL"),
+  OPENROUTER_BASE_URL: optionalVar("OPENROUTER_BASE_URL"),
   AUTUMN_SECRET_KEY: optionalSecret("AUTUMN_SECRET_KEY"),
   AUTUMN_WEBHOOK_SECRET: optionalSecret("AUTUMN_WEBHOOK_SECRET"),
   DUB_API_KEY: optionalSecret("DUB_API_KEY"),
