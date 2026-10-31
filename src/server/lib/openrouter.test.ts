@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { selectChatBaseUrl } from "@/shared/chat-base-url";
-import { buildChatAgentModel, buildChatAgentModelFromEnv } from "./openrouter";
+import { resolveChatProvider } from "@/shared/chat-provider";
+import {
+  buildChatAgentModel,
+  buildChatAgentModelFromEnv,
+  buildChatAgentModelFromResolved,
+} from "./openrouter";
 
 const mocks = vi.hoisted(() => ({
   createOpenRouter: vi.fn(),
@@ -80,6 +85,57 @@ describe("buildChatAgentModel", () => {
       apiKey: "local",
       baseURL: "http://localhost:8000/v1",
       compatibility: "compatible",
+    });
+  });
+});
+
+describe("saved chat settings", () => {
+  beforeEach(() => {
+    mocks.model.mockReturnValue({ modelId: "test" });
+    mocks.createOpenRouter.mockReturnValue(mocks.model);
+  });
+
+  it("sends the saved base URL, key, and model id to the custom endpoint", () => {
+    const resolved = resolveChatProvider(
+      {
+        baseUrl: "https://api.ooapi.cc/v1",
+        apiKey: "ooapi-key",
+        modelId: "gateway-model",
+      },
+      {
+        chatBaseUrl: "https://env.example/v1",
+        apiKey: "env-key",
+        modelId: "env-model",
+      },
+    );
+
+    buildChatAgentModelFromResolved(resolved);
+
+    expect(mocks.createOpenRouter).toHaveBeenCalledWith({
+      apiKey: "ooapi-key",
+      baseURL: "https://api.ooapi.cc/v1",
+      compatibility: "compatible",
+    });
+    expect(mocks.model.mock.calls[0]).toEqual(["gateway-model"]);
+  });
+
+  it("treats a saved empty base URL as OpenRouter and keeps the env key", () => {
+    const resolved = resolveChatProvider(
+      { baseUrl: "  ", apiKey: "", modelId: "" },
+      {
+        chatBaseUrl: "https://env.example/v1",
+        apiKey: "env-key",
+        modelId: "m",
+      },
+    );
+
+    buildChatAgentModelFromResolved(resolved, "max");
+
+    expect(resolved.baseUrl).toBeUndefined();
+    expect(mocks.createOpenRouter).toHaveBeenCalledWith({ apiKey: "env-key" });
+    expect(mocks.model).toHaveBeenCalledWith("m", {
+      usage: { include: true },
+      extraBody: { reasoning: { effort: "max" } },
     });
   });
 });

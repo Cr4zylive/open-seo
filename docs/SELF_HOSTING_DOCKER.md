@@ -33,9 +33,7 @@ Optional env values:
 - `ALLOWED_HOST` (single reverse-proxy hostname to allow in Vite preview)
 - `AUTH_MODE=local_noauth` (already set in compose)
 - `OPEN_SEO_IMAGE` (defaults to `ghcr.io/every-app/open-seo:latest`)
-- `OPENROUTER_API_KEY` (required for AI features such as SAM when using [OpenRouter](https://openrouter.ai/settings/keys))
-- `OPENROUTER_MODEL` (optional model id; the OpenRouter slug, or the id your custom gateway expects)
-- `CHAT_BASE_URL` (optional OpenAI-compatible base URL, including `/v1`. `OPENROUTER_BASE_URL` is an alias)
+- `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `CHAT_BASE_URL` (optional fallback until chat settings are saved in the app)
 
 If you are putting Docker behind a reverse proxy or a temporary tunnel, remember that Docker self-hosting runs with app auth disabled. Only expose it behind your own auth-protected reverse proxy, tunnel, or private network, and add the public hostname before restarting:
 
@@ -47,21 +45,15 @@ You can also persist it in `.env`.
 
 ## AI features (SAM)
 
-SAM calls OpenRouter unless you set a custom chat base URL. For a gateway such as ooapi:
+Open the app and go to Settings (or the chat-model help page). Save:
 
-```bash
-CHAT_BASE_URL=https://api.ooapi.cc/v1
-OPENROUTER_API_KEY=your-provider-api-key
-OPENROUTER_MODEL=the-model-id-that-gateway-expects
-```
+- Chat Base URL. Leave it empty to use OpenRouter. For an OpenAI-compatible gateway, include `/v1`, for example `https://api.ooapi.cc/v1`.
+- Chat API Key. This is the OpenRouter key, or that gateway's own key.
+- Model id. The id the gateway expects.
 
-`OPENROUTER_API_KEY` is the Bearer token. On a custom endpoint it is that provider's API key, not an OpenRouter key. `OPENROUTER_MODEL` is the model id sent in the chat request. The model needs OpenAI-style tool calling, because SAM calls tools. A custom endpoint does not return OpenRouter usage cost, so that spend is recorded as 0.
+The model needs OpenAI-style tool calling, because SAM calls tools. A custom endpoint does not return OpenRouter usage cost, so that spend is recorded as 0. Saving applies on the next chat turn.
 
-Leave `CHAT_BASE_URL` and `OPENROUTER_BASE_URL` unset to keep the OpenRouter default. Restart after changing `.env`:
-
-```bash
-docker compose up -d --force-recreate open-seo
-```
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `CHAT_BASE_URL` (alias `OPENROUTER_BASE_URL`) are only used when nothing has been saved in the app yet.
 
 ## Telemetry
 

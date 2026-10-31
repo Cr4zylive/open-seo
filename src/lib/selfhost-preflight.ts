@@ -206,8 +206,8 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
       name: "AI features",
       level: get(env, "OPENROUTER_MODEL") ? "ok" : "warn",
       message: get(env, "OPENROUTER_MODEL")
-        ? "Custom chat endpoint configured. OPENROUTER_API_KEY is the Bearer token (a placeholder is sent if it is unset). OPENROUTER_MODEL is the model id."
-        : "Custom chat endpoint is set, but OPENROUTER_MODEL is empty. Set it to the model id that endpoint expects, or SAM sends the OpenRouter default slug.",
+        ? "Env chat endpoint is set. It is used only until chat settings are saved in the app."
+        : "Env chat endpoint is set without OPENROUTER_MODEL. Save the model id in the app settings, or SAM sends the OpenRouter default slug until then.",
     });
   } else {
     items.push(
@@ -216,14 +216,15 @@ function checkOptionalFeatures(env: EnvRecord, items: PreflightItem[]): void {
             key: "ai",
             name: "AI features",
             level: "ok",
-            message: "OPENROUTER_API_KEY set",
+            message:
+              "OPENROUTER_API_KEY set (used until chat settings are saved in the app).",
           }
         : {
             key: "ai",
             name: "AI features",
             level: "info",
             message:
-              "OPENROUTER_API_KEY not set (optional) — SAM, the in-app SEO agent, is disabled. Set CHAT_BASE_URL to use an OpenAI-compatible endpoint instead.",
+              "No chat provider in the environment. Configure SAM in the app settings. These env vars are only a fallback before the first save.",
           },
     );
   }

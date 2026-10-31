@@ -93,7 +93,7 @@ describe("runSelfhostPreflight", () => {
     });
     expect(itemFor(configured, "AI features")?.level).toBe("ok");
     expect(itemFor(configured, "AI features")?.message).toContain(
-      "Custom chat endpoint",
+      "until chat settings are saved",
     );
 
     const missingModel = runSelfhostPreflight({

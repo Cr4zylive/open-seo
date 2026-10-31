@@ -272,8 +272,8 @@ const dataEnv = {
   GOOGLE_CLIENT_SECRET: optionalSecret("GOOGLE_CLIENT_SECRET"),
   OPENROUTER_API_KEY: optionalSecret("OPENROUTER_API_KEY"),
   OPENROUTER_MODEL: optionalVar("OPENROUTER_MODEL"),
-  // Self-host: point SAM at an OpenAI-compatible /v1 endpoint. Hosted SaaS
-  // leaves both empty and stays on OpenRouter.
+  // Fallback until chat settings are saved in the app. Hosted SaaS leaves
+  // these empty and stays on the platform OpenRouter key.
   CHAT_BASE_URL: optionalVar("CHAT_BASE_URL"),
   OPENROUTER_BASE_URL: optionalVar("OPENROUTER_BASE_URL"),
   AUTUMN_SECRET_KEY: optionalSecret("AUTUMN_SECRET_KEY"),

@@ -33,7 +33,8 @@ import {
   SamTelemetry,
   type SamTurnStats,
 } from "@/server/features/sam/samTurnTelemetry";
-import { buildChatAgentModelFromEnv } from "@/server/lib/openrouter";
+import { resolveRuntimeChatProvider } from "@/server/features/chat-provider/services/ChatProviderService";
+import { buildChatAgentModelFromResolved } from "@/server/lib/openrouter";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import {
   checkUsageCreditsDepleted,
@@ -187,12 +188,10 @@ export class SamChatAgent extends Think {
     return super.fetch(request);
   }
 
+  // Think calls this before beforeTurn. The turn uses the model beforeTurn
+  // returns, after saved chat settings (or the env fallback) are loaded.
   getModel() {
-    return this.buildModel("max");
-  }
-
-  private buildModel(reasoningEffort: "max" | "low") {
-    return buildChatAgentModelFromEnv(this.env, reasoningEffort);
+    return staticAssistantModel("SAM is loading its chat settings.");
   }
 
   override getSkills() {
@@ -224,8 +223,11 @@ export class SamChatAgent extends Think {
   // Compaction summaries run outside the step loop (so outside onStepFinish),
   // on the same model at low reasoning; their cost joins the turn's total.
   private async summarizeForCompaction(prompt: string): Promise<string> {
+    const resolved = await withPgClient(() =>
+      resolveRuntimeChatProvider(this.env),
+    );
     const result = await generateText({
-      model: this.buildModel("low"),
+      model: buildChatAgentModelFromResolved(resolved, "low"),
       prompt,
     });
     this.recordSpend(openRouterCostUsd(result.providerMetadata));
@@ -305,6 +307,14 @@ export class SamChatAgent extends Think {
     this.turnMonthlyRemaining = null;
     const turn = this.telemetry.beginTurn(turnCtx.continuation);
     return withPgClient(async (): Promise<TurnConfig> => {
+      const resolved = await resolveRuntimeChatProvider(this.env);
+      if (!resolved.apiKey && !resolved.baseUrl) {
+        turn.refusal = "no_model";
+        return this.refusalTurn(
+          "Add a chat API key in Settings before using SAM.",
+        );
+      }
+
       const ctx = await this.loadSamContext();
       if (!ctx) {
         turn.refusal = "no_session";
@@ -369,6 +379,7 @@ export class SamChatAgent extends Think {
       };
 
       return {
+        model: buildChatAgentModelFromResolved(resolved, "max"),
         tools: buildSamMcpTools(authContext, ctx.project, turn.turnId),
         // SAM runs complex multi-step work in one turn (site-read intake plus
         // a full research chain, multi-competitor sweeps), so the step budget

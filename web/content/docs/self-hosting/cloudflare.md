@@ -48,7 +48,7 @@ Copy the template and fill in the required values:
 cp .env.selfhost.example .env.selfhost
 ```
 
-SAM is optional. The same file has `OPENROUTER_API_KEY` for OpenRouter, or `CHAT_BASE_URL` plus that key and `OPENROUTER_MODEL` for another OpenAI-compatible chat API. See [AI features](/docs/self-hosting#ai-features-sam). Redeploy after changing it.
+SAM is optional. After deploy, save the chat model in the app under Settings. See [AI features](/docs/self-hosting#ai-features-sam).
 
 ## 4) Deploy
 

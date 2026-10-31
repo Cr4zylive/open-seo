@@ -20,23 +20,27 @@ export function SamSetupGate({
           <div className="max-w-3xl space-y-1.5">
             <h2 className="text-xl font-semibold">启用 AI 功能</h2>
             <div className="text-sm text-base-content/68">
-              OpenSEO 内置 AI 智能体 SAM 需要一个聊天模型。默认使用
-              OpenRouter：创建密钥并设置为 <code>OPENROUTER_API_KEY</code>
-              。自托管也可以改用任意 OpenAI 兼容接口，设置{" "}
-              <code>CHAT_BASE_URL</code>（含 <code>/v1</code>
-              ），把该服务的 API 密钥填进 <code>OPENROUTER_API_KEY</code>
-              ，并把 <code>OPENROUTER_MODEL</code> 设成该网关要求的模型
-              id。重启后在此确认。
+              OpenSEO 内置 AI 智能体 SAM 需要一个聊天模型。请在设置页填写聊天
+              API Key。使用 OpenAI 兼容接口时，Chat Base URL 填带{" "}
+              <code>/v1</code> 的地址（例如 <code>https://api.ooapi.cc/v1</code>
+              ），模型 id 填该网关要求的名字。保存后在此确认。
             </div>
             <div className="text-xs text-base-content/50">
-              各类部署方式的操作步骤请查看{" "}
+              填写位置：{" "}
+              <Link
+                className="underline underline-offset-2 hover:text-base-content/70"
+                to="/settings"
+              >
+                设置
+              </Link>
+              ，或{" "}
               <Link
                 className="underline underline-offset-2 hover:text-base-content/70"
                 to="/help/openrouter-api-key"
               >
-                OpenRouter API 密钥设置指南
+                聊天模型设置
               </Link>
-              .
+              。
             </div>
           </div>
         </div>
@@ -49,14 +53,9 @@ export function SamSetupGate({
           >
             {isRefetching ? "正在确认…" : "确认 API 密钥"}
           </button>
-          <a
-            className="btn"
-            href="https://openrouter.ai/settings/keys"
-            target="_blank"
-            rel="noreferrer"
-          >
-            打开 OpenRouter 密钥页面
-          </a>
+          <Link className="btn" to="/settings">
+            打开设置
+          </Link>
         </div>
 
         {errorMessage ? (

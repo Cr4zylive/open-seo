@@ -1,14 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { selectChatBaseUrl } from "@/shared/chat-base-url";
-import {
-  getOptionalEnvValue,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
+import { resolveRuntimeChatProvider } from "@/server/features/chat-provider/services/ChatProviderService";
+import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { requireProjectContext } from "@/serverFunctions/middleware";
 
 const OPENROUTER_KEY_MISSING_MESSAGE =
-  "当前部署尚未设置 OPENROUTER_API_KEY，也没有自定义聊天接口（CHAT_BASE_URL）。请配置其一后重启 OpenSEO，再在此确认。";
+  "尚未配置聊天模型。请打开设置，填写聊天 API Key。使用 OpenAI 兼容接口时，再填写 Chat Base URL（需带 /v1，例如 https://api.ooapi.cc/v1）和模型 id，保存后在此确认。";
 
 const projectScopedSchema = z.object({ projectId: z.string().min(1) });
 
@@ -28,13 +25,8 @@ export const getSamAccessSetupStatus = createServerFn({ method: "GET" })
       return { enabled: true, errorMessage: null };
     }
 
-    const baseURL = selectChatBaseUrl(
-      await getOptionalEnvValue("CHAT_BASE_URL"),
-      await getOptionalEnvValue("OPENROUTER_BASE_URL"),
-    );
-    const enabled = Boolean(
-      (await getOptionalEnvValue("OPENROUTER_API_KEY")) || baseURL,
-    );
+    const resolved = await resolveRuntimeChatProvider({});
+    const enabled = Boolean(resolved.apiKey || resolved.baseUrl);
     return {
       enabled,
       errorMessage: enabled ? null : OPENROUTER_KEY_MISSING_MESSAGE,
