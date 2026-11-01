@@ -1,4 +1,4 @@
-import { buildCsv, type CsvValue } from "@/client/lib/csv";
+import type { CsvValue } from "@/client/lib/csv";
 import type { CategoryTab, LighthouseIssue } from "./types";
 
 const ISSUE_HEADERS = [
@@ -7,7 +7,7 @@ const ISSUE_HEADERS = [
   "分数",
   "标题",
   "显示值",
-  "说明",
+  "描述",
   "影响（毫秒）",
   "影响（字节）",
   "受影响项目",
@@ -37,8 +37,4 @@ export function categoryLabel(category: CategoryTab) {
   if (category === "performance") return "性能";
   if (category === "accessibility") return "无障碍";
   return "SEO";
-}
-
-export function issuesToCsv(issues: LighthouseIssue[]) {
-  return buildCsv(ISSUE_HEADERS, issuesToRows(issues));
 }

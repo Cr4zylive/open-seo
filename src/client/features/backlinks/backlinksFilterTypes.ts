@@ -114,6 +114,27 @@ export function countActiveFilters(values: Record<string, string>): number {
   return Object.values(values).filter((v) => v.trim() !== "").length;
 }
 
+export function backlinksFilterConditionLimit(
+  scope: ResearchScope,
+  hideSpam: boolean,
+): number {
+  return (
+    MAX_DATAFORSEO_FILTER_CONDITIONS -
+    (scope === "subfolder" ? BACKLINKS_SUBFOLDER_FILTER_CONDITIONS : 0) -
+    (hideSpam ? 2 : 0)
+  );
+}
+
+export function backlinksFilterBudgetError(
+  values: BacklinksTabFilterValues,
+  scope: ResearchScope,
+  hideSpam: boolean,
+): string | null {
+  const limit = backlinksFilterConditionLimit(scope, hideSpam);
+  if (countFilterConditions(values) <= limit) return null;
+  return `这些筛选超出了此视图的 ${limit} 个条件上限。请在筛选中减少条件${hideSpam ? "，或在「优质链接」中选择「全部链接（含垃圾链接）」" : ""}。你的筛选条件已保留。`;
+}
+
 /**
  * Mirrors how the server translates filters to DataForSEO conditions: each
  * include/exclude term is one condition, every other non-empty field is one.
@@ -188,3 +209,8 @@ export function toTopPagesFiltersPayload(
     maxRank: toNumberOrUndefined(values.maxRank),
   };
 }
+import { MAX_DATAFORSEO_FILTER_CONDITIONS } from "@/types/schemas/domain";
+import {
+  BACKLINKS_SUBFOLDER_FILTER_CONDITIONS,
+  type ResearchScope,
+} from "@/shared/researchScope";

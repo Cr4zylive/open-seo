@@ -1,7 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { resolveRuntimeChatProvider } from "@/server/features/chat-provider/services/ChatProviderService";
-import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import { getOpenRouterAccess } from "@/server/lib/openrouter";
+import {
+  getWorkersEnv,
+  isHostedServerAuthMode,
+} from "@/server/lib/runtime-env";
 import { requireProjectContext } from "@/serverFunctions/middleware";
 
 const OPENROUTER_KEY_MISSING_MESSAGE =
@@ -25,8 +29,13 @@ export const getSamAccessSetupStatus = createServerFn({ method: "GET" })
       return { enabled: true, errorMessage: null };
     }
 
-    const resolved = await resolveRuntimeChatProvider({});
-    const enabled = Boolean(resolved.apiKey || resolved.baseUrl);
+    // A saved custom endpoint or key, an env fallback, or an Every App
+    // gateway binding. The gateway answers 503 until an admin sets its key.
+    const env = (await getWorkersEnv()) ?? {};
+    const resolved = await resolveRuntimeChatProvider(env);
+    const enabled = Boolean(
+      resolved.apiKey || resolved.baseUrl || getOpenRouterAccess(env),
+    );
     return {
       enabled,
       errorMessage: enabled ? null : OPENROUTER_KEY_MISSING_MESSAGE,

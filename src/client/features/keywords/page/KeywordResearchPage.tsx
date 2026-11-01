@@ -1,11 +1,16 @@
-import { Link } from "@tanstack/react-router";
 import { useCallback, useMemo } from "react";
-import { AlertCircle, ArrowLeft } from "lucide-react";
+import { ErrorState } from "@/client/components/ErrorState";
+import { FormDialog } from "@/client/components/FormDialog";
+import { BackButton, PageHeader } from "@/client/components/PageHeader";
+import { Button } from "@/client/components/ui/button";
+import { InsufficientCreditsError } from "@/client/features/billing/InsufficientCreditsError";
 import { getErrorCode } from "@/client/lib/error-messages";
-import { BILLING_ROUTE } from "@/shared/billing";
+import { formatLocationLabel } from "@/shared/keyword-locations";
 import { useKeywordResearchController } from "@/client/features/keywords/state/useKeywordResearchController";
-import type { KeywordResearchControllerInput } from "@/client/features/keywords/state/useKeywordResearchController";
-import type { KeywordControlsValues } from "@/client/features/keywords/hooks/useKeywordControlsForm";
+import type {
+  KeywordResearchControllerInput,
+  KeywordSubmitValues,
+} from "@/client/features/keywords/state/useKeywordResearchController";
 import { parseKeywordInput } from "@/client/features/keywords/state/keywordControllerActions";
 import {
   useKeywordSearchParams,
@@ -52,9 +57,11 @@ export function KeywordResearchPage(input: Props) {
         setSearchParams({
           q: undefined,
           loc: undefined,
+          locName: undefined,
           kLimit: undefined,
           mode: undefined,
           cs: undefined,
+          grp: undefined,
         });
         return;
       }
@@ -62,9 +69,11 @@ export function KeywordResearchPage(input: Props) {
       setSearchParams({
         q: tabInput.keyword,
         loc: tabInput.locationCode,
+        locName: tabInput.locationName,
         kLimit: tabInput.resultLimit === 150 ? undefined : tabInput.resultLimit,
         mode: tabInput.mode === "auto" ? undefined : tabInput.mode,
         cs: tabInput.clickstream ? true : undefined,
+        grp: tabInput.groupKeywords ? true : undefined,
       });
     },
     [setSearchParams],
@@ -78,24 +87,30 @@ export function KeywordResearchPage(input: Props) {
       type: "keyword",
       keyword,
       locationCode,
+      locationName: input.locationName,
       resultLimit: input.resultLimit,
       mode: input.keywordMode,
       clickstream: input.clickstream,
+      groupKeywords: input.groupKeywords,
     };
   }, [
     input.clickstream,
+    input.groupKeywords,
     input.keywordInput,
     input.keywordMode,
+    input.locationName,
     locationCode,
     input.resultLimit,
   ]);
   const searchTabs = useSearchTabNavigation({
     storageKey: `keyword:${projectId}`,
     urlInput,
-    getLabel: useCallback(
-      (tabInput) => (tabInput.type === "keyword" ? tabInput.keyword : ""),
-      [],
-    ),
+    getLabel: useCallback((tabInput) => {
+      if (tabInput.type !== "keyword") return "";
+      return tabInput.locationName
+        ? `${tabInput.keyword} · ${formatLocationLabel(tabInput.locationName, 1)}`
+        : tabInput.keyword;
+    }, []),
     navigateToInput: useCallback(
       (tabInput) => {
         navigateToKeywordInput(tabInput?.type === "keyword" ? tabInput : null);
@@ -119,7 +134,7 @@ export function KeywordResearchPage(input: Props) {
   }, [searchTabs.activeTabId, searchTabs.tabs, urlInput]);
 
   const onFormSubmit = useCallback(
-    (value: KeywordControlsValues) => {
+    (value: KeywordSubmitValues) => {
       const keywords = parseKeywordInput(value.keyword);
       if (keywords.length === 0) return;
 
@@ -127,9 +142,11 @@ export function KeywordResearchPage(input: Props) {
         type: "keyword",
         keyword,
         locationCode: value.locationCode,
+        locationName: value.locationName,
         resultLimit: value.resultLimit,
         mode: value.mode,
         clickstream: value.clickstream,
+        groupKeywords: value.groupKeywords,
       }));
 
       for (const tabInput of inputs) {
@@ -152,10 +169,12 @@ export function KeywordResearchPage(input: Props) {
             locationCode: activeTab.input.locationCode,
             displayedLocationCode:
               activeTab.input.locationCode ?? displayedLocationCode,
+            locationName: activeTab.input.locationName,
             setPreferredLocationCode,
             resultLimit: activeTab.input.resultLimit,
             keywordMode: activeTab.input.mode,
             clickstream: activeTab.input.clickstream,
+            groupKeywords: activeTab.input.groupKeywords,
           }
         : {
             ...input,
@@ -178,35 +197,32 @@ export function KeywordResearchPage(input: Props) {
 
   return (
     <div className="px-4 py-4 md:px-6 md:py-6 pb-24 md:pb-8 overflow-auto">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <div>
-          <h1 className="text-2xl font-semibold">关键词研究</h1>
-          <p className="text-sm text-base-content/70">
-            发现关键词创意、搜索需求和排名机会。
-          </p>
-        </div>
+      <div className="mx-auto flex max-w-7xl flex-col gap-4">
+        <PageHeader
+          title="关键词研究"
+          description="发现关键词灵感、搜索需求和排名机会。"
+          backLink={
+            controller.hasSearched ? (
+              <BackButton
+                data-testid="keyword-research-recent-searches"
+                onClick={showRecentSearches}
+              >
+                最近搜索
+              </BackButton>
+            ) : undefined
+          }
+        />
 
         <KeywordResearchSearchBar controller={controller} />
         {controller.hasSearched ? (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              data-testid="keyword-research-recent-searches"
-              className="btn btn-ghost btn-sm w-fit gap-2 px-0 text-base-content/70 hover:bg-transparent"
-              onClick={showRecentSearches}
-            >
-              <ArrowLeft className="size-4" />
-              最近搜索
-            </button>
-            <SearchTabStrip
-              projectId={projectId}
-              tabs={searchTabs.tabs}
-              activeTabId={searchTabs.activeTabId}
-              onSelect={searchTabs.selectTab}
-              onClose={searchTabs.closeTab}
-              onViewed={searchTabs.markTabViewed}
-            />
-          </div>
+          <SearchTabStrip
+            projectId={projectId}
+            tabs={searchTabs.tabs}
+            activeTabId={searchTabs.activeTabId}
+            onSelect={searchTabs.selectTab}
+            onClose={searchTabs.closeTab}
+            onViewed={searchTabs.markTabViewed}
+          />
         ) : null}
         <KeywordResearchContent
           controller={controller}
@@ -229,41 +245,59 @@ function KeywordResearchContent({
     return <KeywordResearchLoadingState />;
   }
 
-  if (controller.researchError) {
-    const isCreditsError =
-      getErrorCode(controller.researchMutationError) === "INSUFFICIENT_CREDITS";
-
-    return (
-      <div className="flex-1 flex items-center justify-center pt-1">
-        <div className="w-full max-w-xl rounded-xl border border-error/30 bg-error/10 p-5 text-error space-y-3">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <p className="text-sm">{controller.researchError}</p>
-          </div>
-          {isCreditsError ? (
-            <Link to={BILLING_ROUTE} className="btn btn-sm">
-              前往账单
-            </Link>
-          ) : (
-            <button className="btn btn-sm" onClick={controller.retrySearch}>
-              重试
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
+  const errorCard = controller.researchError ? (
+    <ResearchErrorCard
+      controller={controller}
+      message={controller.researchError}
+    />
+  ) : null;
 
   if (controller.rows.length === 0) {
     return (
-      <KeywordResearchEmptyState
-        controller={controller}
-        projectId={projectId}
-      />
+      errorCard ?? (
+        <KeywordResearchEmptyState
+          controller={controller}
+          projectId={projectId}
+        />
+      )
     );
   }
 
-  return <KeywordResearchResults controller={controller} />;
+  // A failed refetch keeps the loaded results on screen, under the error.
+  return (
+    <>
+      {errorCard}
+      <KeywordResearchResults controller={controller} />
+    </>
+  );
+}
+
+function ResearchErrorCard({
+  controller,
+  message,
+}: {
+  controller: KeywordResearchControllerState;
+  message: string;
+}) {
+  const errorCode = getErrorCode(controller.researchMutationError);
+
+  return (
+    <div className="mx-auto w-full max-w-xl pt-1">
+      {errorCode === "INSUFFICIENT_CREDITS" ? (
+        <InsufficientCreditsError />
+      ) : (
+        <ErrorState
+          message={message}
+          onRetry={
+            errorCode === "UNKNOWN_LOCATION"
+              ? undefined
+              : controller.retrySearch
+          }
+          isRetrying={controller.researchRetrying}
+        />
+      )}
+    </div>
+  );
 }
 
 function KeywordSaveDialog({
@@ -274,32 +308,35 @@ function KeywordSaveDialog({
   if (!controller.showSaveDialog) return null;
 
   return (
-    <div className="modal modal-open">
-      <div className="modal-box">
-        <h3 className="font-bold text-lg">
-          保存 {controller.selectedRows.size} 关键词
-        </h3>
-        <div className="py-4">
-          <p className="text-base-content/70 text-sm">
-            这些关键词将保存到当前项目。
-          </p>
-        </div>
-        <div className="modal-action">
-          <button
-            className="btn"
+    <FormDialog
+      title={`保存 ${controller.selectedKeywordRows.length} 个关键词`}
+      onClose={() => controller.setShowSaveDialog(false)}
+      actions={
+        <>
+          <Button
+            variant="outline"
             onClick={() => controller.setShowSaveDialog(false)}
           >
             取消
-          </button>
-          <button className="btn btn-primary" onClick={controller.confirmSave}>
+          </Button>
+          <Button
+            pending={controller.savePending}
+            onClick={controller.confirmSave}
+          >
             保存
-          </button>
-        </div>
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-2 text-sm text-muted-foreground">
+        <p>这些关键词将保存到当前项目。</p>
+        {controller.locationName ? (
+          <p>
+            已保存关键词显示全国数据。
+            {formatLocationLabel(controller.locationName)} 的本地搜索量不会保存。
+          </p>
+        ) : null}
       </div>
-      <div
-        className="modal-backdrop"
-        onClick={() => controller.setShowSaveDialog(false)}
-      />
-    </div>
+    </FormDialog>
   );
 }

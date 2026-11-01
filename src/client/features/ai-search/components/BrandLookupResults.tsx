@@ -1,4 +1,21 @@
-import { Info } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
+import { Info, TriangleAlert } from "lucide-react";
+import { Alert, AlertTitle } from "@/client/components/ui/alert";
+import { Badge } from "@/client/components/ui/badge";
+import { Card } from "@/client/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/client/components/ui/tooltip";
+import { DomainLevelBadge } from "@/client/features/ai-search/components/DomainLevelBadge";
 import { BrandLookupMentionTrendCard } from "@/client/features/ai-search/components/BrandLookupMentionTrendCard";
 import { BrandLookupShareOfVoice } from "@/client/features/ai-search/components/BrandLookupShareOfVoice";
 import { CitationTabsCard } from "@/client/features/ai-search/components/BrandLookupCitationsCard";
@@ -15,26 +32,8 @@ type Props = {
   projectId: string;
 };
 
-type PlatformRow = BrandLookupResult["perPlatform"][number];
-type MetricKey = "mentions" | "aiSearchVolume";
-
 const DOMAIN_LEVEL_TIP =
   "AI 搜索提供商按域名报告提及次数，而不是按页面。此数字覆盖整个域名——下方的引用页面已限定在你选择的范围内。";
-
-/**
- * Marks a metric that could not be narrowed to a URL scope, so a page-scoped
- * lookup never reads as if the number belonged to that page.
- */
-function DomainLevelBadge() {
-  return (
-    <span
-      className="tooltip badge badge-ghost badge-sm shrink-0 normal-case"
-      data-tip={DOMAIN_LEVEL_TIP}
-    >
-      域名级
-    </span>
-  );
-}
 
 export function BrandLookupResults({ result, projectId }: Props) {
   if (!result.hasData) {
@@ -47,24 +46,30 @@ export function BrandLookupResults({ result, projectId }: Props) {
 
     if (allPlatformsErrored) {
       return (
-        <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-sm">
-          以下对象的 AI 提及数据暂时不可用：{" "}
-          <strong>{result.resolvedTarget}</strong>。请稍后重试。
-        </div>
+        <Alert variant="warning">
+          <TriangleAlert aria-hidden />
+          <AlertTitle className="font-normal">
+            <strong>{result.resolvedTarget}</strong>{" "}
+            的 AI 提及数据暂时不可用。请稍后重试。
+          </AlertTitle>
+        </Alert>
       );
     }
     return (
       <div className="space-y-3">
-        <div className="rounded-lg border border-info/30 bg-info/10 p-4 text-sm">
-          未找到以下对象的 AI 提及： <strong>{result.resolvedTarget}</strong>。
-        </div>
+        <Alert variant="info">
+          <Info aria-hidden />
+          <AlertTitle className="font-normal">
+            未找到 <strong>{result.resolvedTarget}</strong> 的 AI 提及。
+          </AlertTitle>
+        </Alert>
         {erroredPlatforms.length > 0 ? (
-          <p className="text-xs text-base-content/60">
-            提示：{" "}
+          <p className="text-xs text-muted-foreground">
+            说明：{" "}
             {erroredPlatforms
               .map((p) => formatPlatformLabel(p.platform))
-              .join("、")}{" "}
-            暂时不可用，部分提及数据可能缺失。
+              .join(" 和 ")}{" "}
+            暂时不可用，部分提及可能缺失。
           </p>
         ) : null}
       </div>
@@ -75,16 +80,19 @@ export function BrandLookupResults({ result, projectId }: Props) {
   const sov = result.shareOfVoice;
 
   return (
-    <div className="space-y-4">
+    <Card className="gap-0 py-0">
       <BrandHeader result={result} />
 
-      {/* One shared grid so the cards align by construction: stats left, trend
-          right, Share of Voice flowing into the next free half-width cell —
-          whichever of trend/SoV is absent, the rest stay column-aligned. A
-          lone stats card keeps full width instead of half a grid. */}
+      {/* One shared grid so the panels align by construction: stats left,
+          trend right, Share of Voice flowing into the next free half-width
+          cell — whichever of trend/SoV is absent, the rest stay
+          column-aligned. A lone stats panel keeps full width instead of half a
+          grid. */}
       <div
         className={
-          hasTrendData || sov ? "grid gap-4 lg:grid-cols-2" : undefined
+          hasTrendData || sov
+            ? "grid gap-3 px-4 pb-4 lg:grid-cols-2"
+            : "px-4 pb-4"
         }
       >
         <StatsCard result={result} />
@@ -97,29 +105,27 @@ export function BrandLookupResults({ result, projectId }: Props) {
         ) : null}
       </div>
 
-      <CitationTabsCard result={result} projectId={projectId} />
-    </div>
+      <div className="px-4 pb-4">
+        <CitationTabsCard result={result} projectId={projectId} />
+      </div>
+    </Card>
   );
 }
 
 function BrandHeader({ result }: { result: BrandLookupResult }) {
   return (
-    <section className="flex flex-wrap items-baseline justify-between gap-2">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <h2 className="text-3xl font-semibold tracking-tight">
+    <section className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4 pb-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-lg font-semibold break-all">
           {result.resolvedTarget}
         </h2>
-        <span className="badge badge-ghost badge-sm">
-          {result.detectedTargetType === "domain" ? "域名" : "关键词"}
-        </span>
+        <Badge variant="secondary">{result.detectedTargetType}</Badge>
         {result.scope ? (
-          <span className="badge badge-ghost badge-sm">
-            {RESEARCH_SCOPE_LABELS[result.scope]}
-          </span>
+          <Badge variant="outline">{RESEARCH_SCOPE_LABELS[result.scope]}</Badge>
         ) : null}
       </div>
-      <p className="text-xs text-base-content/50">
-        更新时间 {formatRelative(result.fetchedAt)}
+      <p className="ml-auto text-xs text-muted-foreground">
+        更新于 {formatRelative(result.fetchedAt)}
       </p>
     </section>
   );
@@ -127,111 +133,102 @@ function BrandHeader({ result }: { result: BrandLookupResult }) {
 
 function StatsCard({ result }: { result: BrandLookupResult }) {
   return (
-    <section className="rounded-xl border border-base-300 bg-base-100">
-      <div className="flex h-full flex-col divide-y divide-base-200">
-        <StatBlock
-          label="提及量"
-          tooltip="包含所查品牌或域名的 AI 回答预估数量，出现位置包括正文或引用来源。"
-          value={result.totalMentions}
-          perPlatform={result.perPlatform}
-          metric="mentions"
-          isDomainLevel={result.aggregatesAreDomainLevel}
-        />
-        <StatBlock
-          label="AI 搜索量"
-          tooltip="品牌或域名出现在 AI 回答中时，相关提示词的预估月度搜索需求。此数据表示提示词需求量，不代表提及次数。"
-          value={result.totalAiSearchVolume}
-          perPlatform={result.perPlatform}
-          metric="aiSearchVolume"
-          isDomainLevel={result.aggregatesAreDomainLevel}
-        />
-      </div>
-    </section>
-  );
-}
-
-function StatBlock({
-  label,
-  tooltip,
-  value,
-  perPlatform,
-  metric,
-  isDomainLevel,
-}: {
-  label: string;
-  tooltip: string;
-  value: number | null;
-  perPlatform: PlatformRow[];
-  metric: MetricKey;
-  isDomainLevel: boolean;
-}) {
-  return (
-    <div className="flex flex-1 flex-col justify-center p-4">
-      <p className="inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-base-content/50">
-        {label}
-        <span className="tooltip inline-flex normal-case" data-tip={tooltip}>
-          <Info className="size-3 text-base-content/40" />
-        </span>
-        {isDomainLevel ? <DomainLevelBadge /> : null}
-      </p>
-      <p className="mt-1 text-3xl font-semibold tabular-nums">
-        {formatCount(value)}
-      </p>
-      <div className="mt-3 space-y-1 border-t border-base-200 pt-2.5">
-        {perPlatform.map((row) => (
-          <PlatformStatRow key={row.platform} row={row} metric={metric} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PlatformStatRow({
-  row,
-  metric,
-}: {
-  row: PlatformRow;
-  metric: MetricKey;
-}) {
-  const value = row.status === "error" ? null : row[metric];
-
-  return (
-    <div className="flex items-center justify-between text-xs">
-      <span className="inline-flex items-center gap-1.5 text-base-content/70">
-        <span
-          className={`size-1.5 rounded-full ${PLATFORM_DOT_CLASS[row.platform]}`}
-        />
-        {formatPlatformLabel(row.platform)}
-        {row.platform === "chat_gpt" ? (
-          <span
-            className="tooltip z-20 inline-flex"
-            data-tip="DataForSEO 仅索引美国英语环境中的 ChatGPT 提及，因此此平台无法选择国家或地区。"
-          >
-            <Info className="size-3 text-base-content/40" />
-          </span>
-        ) : null}
-        {row.status === "error" ? (
-          <span className="text-error">不可用</span>
-        ) : null}
-      </span>
-      <span className="font-medium tabular-nums text-base-content/90">
-        {formatCount(value)}
-      </span>
+    <div className="w-full max-w-xl rounded-lg border border-border p-3">
+      {result.aggregatesAreDomainLevel && (
+        <div className="mb-2">
+          <DomainLevelBadge tooltip={DOMAIN_LEVEL_TIP} />
+        </div>
+      )}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>平台</TableHead>
+            <TableHead className="text-right">
+              <span className="inline-flex items-center gap-1">
+                提及
+                <InfoTooltip text="提及你的品牌或引用你网站的 AI 回答。" />
+              </span>
+            </TableHead>
+            <TableHead className="text-right">
+              <span className="inline-flex items-center gap-1">
+                AI 搜索量
+                <InfoTooltip text="品牌出现在 AI 回答中的提示词的预估月度搜索量。" />
+              </span>
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow className="font-medium">
+            <TableCell>合计</TableCell>
+            <TableCell className="text-right tabular-nums">
+              {formatCount(result.totalMentions)}
+            </TableCell>
+            <TableCell className="text-right tabular-nums">
+              {formatCount(result.totalAiSearchVolume)}
+            </TableCell>
+          </TableRow>
+          {result.perPlatform.map((row) => (
+            <TableRow key={row.platform}>
+              <TableCell>
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className={`size-1.5 rounded-full ${PLATFORM_DOT_CLASS[row.platform]}`}
+                  />
+                  {formatPlatformLabel(row.platform)}
+                  {row.platform === "chat_gpt" && (
+                    <InfoTooltip text="ChatGPT 数据仅覆盖美国英语。" />
+                  )}
+                  {row.status === "error" && (
+                    <span className="text-destructive">不可用</span>
+                  )}
+                </span>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatCount(row.status === "error" ? null : row.mentions)}
+              </TableCell>
+              <TableCell className="text-right tabular-nums">
+                {formatCount(
+                  row.status === "error" ? null : row.aiSearchVolume,
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
 
 function MentionTrendCard({ result }: { result: BrandLookupResult }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-base-300 bg-base-100">
-      <div className="flex items-center justify-between gap-2 border-b border-base-300 px-4 py-3">
-        <h3 className="text-sm font-semibold">提及趋势（最近 12 个月）</h3>
-        {result.aggregatesAreDomainLevel ? <DomainLevelBadge /> : null}
+    <div className="rounded-lg border border-border">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <h3 className="text-sm font-medium">提及趋势（最近 12 个月）</h3>
+        {result.aggregatesAreDomainLevel ? (
+          <DomainLevelBadge tooltip={DOMAIN_LEVEL_TIP} />
+        ) : null}
       </div>
       <div className="p-4">
         <BrandLookupMentionTrendCard result={result} />
       </div>
-    </section>
+    </div>
+  );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        delay={150}
+        aria-label="更多信息"
+        className="inline-flex rounded-sm text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+      >
+        <Info className="size-3" />
+      </TooltipTrigger>
+      <TooltipContent className="normal-case tracking-normal font-normal">
+        {text}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

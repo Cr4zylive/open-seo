@@ -1,14 +1,45 @@
 import type { FormEvent } from "react";
+import { cn } from "cn";
+import { Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "@/client/components/ui/tooltip";
+import { sortBy } from "remeda";
+import { Button } from "@/client/components/ui/button";
+import { Card, CardContent } from "@/client/components/ui/card";
+import { Checkbox } from "@/client/components/ui/checkbox";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FieldTitle,
+} from "@/client/components/ui/field";
+import { Input } from "@/client/components/ui/input";
+import { Label } from "@/client/components/ui/label";
+import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@/client/components/ui/combobox";
+import {
+  WEB_SEARCH_COUNTRY_CODES,
+  supportsWebSearchCountry,
+} from "@/shared/prompt-search-countries";
+import { Textarea } from "@/client/components/ui/textarea";
 import {
   formatCountryLabel,
   formatModelLabel,
-} from "@/client/features/ai-search/platformLabels";
+} from "@/shared/prompt-explorer-labels";
 import {
   PROMPT_EXPLORER_MAX_PROMPT_LENGTH,
   PROMPT_EXPLORER_MODELS,
-  WEB_SEARCH_COUNTRY_CODES,
   type PromptExplorerModel,
-  type WebSearchCountryCode,
+  type WebSearchCountrySelection,
 } from "@/types/schemas/ai-search";
 
 type FormValues = {
@@ -16,7 +47,7 @@ type FormValues = {
   highlightBrand: string;
   models: PromptExplorerModel[];
   webSearch: boolean;
-  webSearchCountryCode: WebSearchCountryCode;
+  webSearchCountryCode: WebSearchCountrySelection;
 };
 
 type Props = {
@@ -25,19 +56,24 @@ type Props = {
   onHighlightBrandChange: (value: string) => void;
   onModelsChange: (value: PromptExplorerModel[]) => void;
   onWebSearchChange: (value: boolean) => void;
-  onCountryChange: (value: WebSearchCountryCode) => void;
+  onCountryChange: (value: WebSearchCountrySelection) => void;
   onSubmit: (event: FormEvent) => void;
-  isLoading: boolean;
   validationError: string | null;
 };
 
-function isCountryCode(value: string): value is WebSearchCountryCode {
-  return (WEB_SEARCH_COUNTRY_CODES as readonly string[]).includes(value);
-}
-
-function parseCountryCode(value: string): WebSearchCountryCode {
-  return isCountryCode(value) ? value : "US";
-}
+const COUNTRY_ITEMS: Array<{
+  value: WebSearchCountrySelection;
+  label: string;
+}> = [
+  { value: "default", label: "不指定国家/地区" },
+  ...sortBy(
+    WEB_SEARCH_COUNTRY_CODES.map((code) => ({
+      value: code,
+      label: formatCountryLabel(code),
+    })),
+    (item) => item.label,
+  ),
+];
 
 export function PromptExplorerForm({
   form,
@@ -47,7 +83,6 @@ export function PromptExplorerForm({
   onWebSearchChange,
   onCountryChange,
   onSubmit,
-  isLoading,
   validationError,
 }: Props) {
   const toggleModel = (model: PromptExplorerModel) => {
@@ -58,131 +93,169 @@ export function PromptExplorerForm({
     }
   };
 
+  const countryItems = COUNTRY_ITEMS.filter(
+    (item) =>
+      item.value === "default" ||
+      item.value === form.webSearchCountryCode ||
+      form.models.some((model) => supportsWebSearchCountry(model, item.value)),
+  );
+  const unsupportedModels =
+    form.webSearch && form.webSearchCountryCode !== "default"
+      ? form.models.filter(
+          (model) =>
+            !supportsWebSearchCountry(model, form.webSearchCountryCode),
+        )
+      : [];
+  const supportedModels = form.models.filter(
+    (model) => !unsupportedModels.includes(model),
+  );
+
   const promptCharCount = form.prompt.length;
   const promptOverLimit = promptCharCount > PROMPT_EXPLORER_MAX_PROMPT_LENGTH;
 
   return (
-    <form
-      onSubmit={onSubmit}
-      className="card border border-base-300 bg-base-100"
-    >
-      <div className="card-body gap-5">
-        <div className="space-y-1.5">
-          <label
-            className="block text-sm font-medium"
-            htmlFor="prompt-explorer-prompt"
-          >
-            提示词
-          </label>
-          <textarea
-            id="prompt-explorer-prompt"
-            className={`textarea textarea-bordered w-full resize-none ${
-              promptOverLimit ? "textarea-error" : ""
-            }`}
-            rows={3}
-            value={form.prompt}
-            maxLength={PROMPT_EXPLORER_MAX_PROMPT_LENGTH + 50}
-            onChange={(event) => onPromptChange(event.target.value)}
-            aria-invalid={promptOverLimit ? true : undefined}
-            autoFocus
-          />
-          <div className="flex items-center justify-between text-xs text-base-content/60">
-            <span>客户可能向 AI 提出的问题。</span>
-            <span
-              className={`tabular-nums ${promptOverLimit ? "font-medium text-error" : ""}`}
-            >
-              {promptCharCount}/{PROMPT_EXPLORER_MAX_PROMPT_LENGTH}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <label
-              className="block text-sm font-medium"
-              htmlFor="prompt-explorer-brand"
-            >
-              突出显示品牌（可选）
-            </label>
-            <input
-              id="prompt-explorer-brand"
-              type="text"
-              className="input input-bordered w-full"
-              value={form.highlightBrand}
-              onChange={(event) => onHighlightBrandChange(event.target.value)}
-              autoComplete="off"
-              spellCheck={false}
+    <Card>
+      <CardContent>
+        <form onSubmit={onSubmit} noValidate className="space-y-5">
+          <Field>
+            <FieldLabel htmlFor="prompt-explorer-prompt">提示词</FieldLabel>
+            <Textarea
+              id="prompt-explorer-prompt"
+              className="resize-none"
+              rows={3}
+              value={form.prompt}
+              maxLength={PROMPT_EXPLORER_MAX_PROMPT_LENGTH + 50}
+              onChange={(event) => onPromptChange(event.target.value)}
+              aria-invalid={promptOverLimit ? true : undefined}
+              autoFocus
             />
-            <p className="text-xs text-base-content/60">
-              系统会标记每个模型是否提及此品牌。
-            </p>
-          </div>
+            <FieldDescription className="flex items-center justify-between">
+              <span>客户可能会向 AI 提出的问题。</span>
+              <span
+                className={cn(
+                  "tabular-nums",
+                  promptOverLimit && "font-medium text-destructive",
+                )}
+              >
+                {promptCharCount}/{PROMPT_EXPLORER_MAX_PROMPT_LENGTH}
+              </span>
+            </FieldDescription>
+          </Field>
 
-          <div className="space-y-1.5">
-            <span className="block text-sm font-medium">模型</span>
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1.5">
-              {PROMPT_EXPLORER_MODELS.map((model) => {
-                const isActive = form.models.includes(model);
-                return (
-                  <label
-                    key={model}
-                    className="flex cursor-pointer items-center gap-2"
-                  >
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-sm"
-                      checked={isActive}
-                      onChange={() => toggleModel(model)}
-                    />
-                    <span className="text-sm">{formatModelLabel(model)}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-base-300 pt-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                className="checkbox checkbox-sm"
-                checked={form.webSearch}
-                onChange={(event) => onWebSearchChange(event.target.checked)}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <Field>
+              <FieldLabel htmlFor="prompt-explorer-brand">
+                高亮品牌（可选）
+              </FieldLabel>
+              <Input
+                id="prompt-explorer-brand"
+                value={form.highlightBrand}
+                onChange={(event) => onHighlightBrandChange(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
               />
-              <span className="text-sm">允许联网搜索（回答更及时）</span>
-            </label>
-            <select
-              id="prompt-explorer-country"
-              aria-label="联网搜索地区"
-              className="select select-bordered select-sm min-w-0 sm:max-w-xs"
-              value={form.webSearchCountryCode}
-              onChange={(event) =>
-                onCountryChange(parseCountryCode(event.target.value))
-              }
-              disabled={!form.webSearch}
-            >
-              {WEB_SEARCH_COUNTRY_CODES.map((code) => (
-                <option key={code} value={code}>
-                  {formatCountryLabel(code)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <button
-            type="submit"
-            className="btn btn-primary shrink-0 px-6"
-            disabled={isLoading || form.models.length === 0}
-          >
-            {isLoading ? "运行中…" : "运行"}
-          </button>
-        </div>
+              <FieldDescription>
+                我们会标出各模型是否提及该品牌。
+              </FieldDescription>
+            </Field>
 
-        {validationError ? (
-          <p className="text-sm text-error">{validationError}</p>
-        ) : null}
-      </div>
-    </form>
+            <Field>
+              <FieldTitle>模型</FieldTitle>
+              <div className="flex flex-wrap items-start gap-x-5 gap-y-2 pt-1.5">
+                {PROMPT_EXPLORER_MODELS.map((model) => (
+                  <Label key={model} className="font-normal">
+                    <Checkbox
+                      checked={form.models.includes(model)}
+                      onCheckedChange={() => toggleModel(model)}
+                    />
+                    <span>
+                      {formatModelLabel(model)}
+                      {unsupportedModels.includes(model) &&
+                      form.webSearchCountryCode !== "default" ? (
+                        <span className="block text-xs text-muted-foreground">
+                          已跳过（
+                          {formatCountryLabel(form.webSearchCountryCode)}）
+                        </span>
+                      ) : null}
+                    </span>
+                  </Label>
+                ))}
+              </div>
+            </Field>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <Label className="font-normal">
+                <Checkbox
+                  checked={form.webSearch}
+                  onCheckedChange={onWebSearchChange}
+                />
+                允许网页搜索
+              </Label>
+              <Combobox
+                items={countryItems}
+                value={
+                  COUNTRY_ITEMS.find(
+                    (item) => item.value === form.webSearchCountryCode,
+                  ) ?? null
+                }
+                itemToStringLabel={(item) => item.label}
+                autoHighlight
+                onValueChange={(item) => {
+                  if (item) onCountryChange(item.value);
+                }}
+                disabled={!form.webSearch}
+              >
+                <ComboboxInput
+                  aria-label="网页搜索国家/地区"
+                  placeholder="搜索国家或地区"
+                  className="w-full sm:w-80"
+                />
+                <ComboboxContent>
+                  <ComboboxEmpty>没有匹配的支持国家/地区。</ComboboxEmpty>
+                  <ComboboxList>
+                    {(item: (typeof COUNTRY_ITEMS)[number]) => (
+                      <ComboboxItem key={item.value} value={item}>
+                        {item.label}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <button
+                      type="button"
+                      aria-label="关于国家/地区定向"
+                      className="text-muted-foreground"
+                    />
+                  }
+                >
+                  <Info className="size-4" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  模型支持时，国家/地区会引导网页搜索。模型也可能不搜索就回答。不指定则可运行全部所选模型。
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Button
+              type="submit"
+              className="px-6"
+              disabled={supportedModels.length === 0}
+            >
+              运行 {supportedModels.length} 个模型
+            </Button>
+          </div>
+
+          {validationError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {validationError}
+            </p>
+          ) : null}
+        </form>
+      </CardContent>
+    </Card>
   );
 }

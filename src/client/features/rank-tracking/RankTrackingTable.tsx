@@ -1,26 +1,24 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { FileDown, Loader2, Sheet, Trash2 } from "lucide-react";
-import { Modal } from "@/client/components/Modal";
-import {
-  AppDataTable,
-  useAppTable,
-} from "@/client/components/table/AppDataTable";
+import { FileDown, Plus, Sheet, Trash2 } from "lucide-react";
+import { ConfirmDialog } from "@/client/components/ConfirmDialog";
+import { Button } from "@/client/components/ui/button";
+import { DataTable, useDataTable } from "@/client/components/table/DataTable";
 import {
   TableBulkActionBar,
   TableBulkActionButton,
   TableBulkExportMenu,
 } from "@/client/components/table/TableBulkActionBar";
-import { buildCsv } from "@/client/lib/csv";
-import { downloadCsv } from "@/client/lib/csv";
-import { exportTableToSheets } from "@/client/lib/exportToSheets";
-import { captureClientEvent } from "@/client/lib/posthog";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { SortingState } from "@tanstack/react-table";
 import { removeTrackingKeywords } from "@/serverFunctions/rank-tracking";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import type { RankTrackingRow } from "@/types/schemas/rank-tracking";
-import { useRankTrackingColumns } from "./RankTrackingColumns";
-import { buildRankTrackingExport } from "./RankTrackingTableParts";
+import {
+  PINNED_COLUMN_ID,
+  useRankTrackingColumns,
+} from "./RankTrackingColumns";
+import { useSetKeywordPinned } from "./useSetKeywordPinned";
+import { exportRankTracking } from "./RankTrackingTableParts";
 import {
   KeywordTrendModal,
   type KeywordTrendTarget,
@@ -30,29 +28,35 @@ import type { SelectionAnchor } from "@/client/components/table/tableSelection";
 export function RankTrackingTable({
   totalCount,
   rows,
-  resultsLoading,
   showDesktop,
   showMobile,
-  defaultSortId,
+  sorting,
+  onSortingChange,
   domain,
   configId,
   projectId,
   locationCode,
+  languageCode,
   locationName,
   serpDepth,
+  onAddKeywords,
+  onClearFilters,
 }: {
   totalCount: number;
   rows: RankTrackingRow[];
-  resultsLoading: boolean;
   showDesktop: boolean;
   showMobile: boolean;
-  defaultSortId: string;
+  sorting: SortingState;
+  onSortingChange: (sorting: SortingState) => void;
   domain: string;
   configId: string;
   projectId: string;
   locationCode: number;
+  languageCode: string;
   locationName?: string | null;
   serpDepth: number;
+  onAddKeywords: () => void;
+  onClearFilters: () => void;
 }) {
   const queryClient = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
@@ -70,21 +74,40 @@ export function RankTrackingTable({
     [],
   );
 
+  const setKeywordPinned = useSetKeywordPinned(projectId, configId);
   const columns = useRankTrackingColumns({
     showDesktop,
     showMobile,
     domain,
     selectAnchorRef,
     onKeywordClick: handleKeywordClick,
+    onSetPinned: setKeywordPinned,
     locationName,
   });
 
-  const table = useAppTable({
+  // The pinned column sorts first and stays out of the sorting the page owns.
+  // Keep sorting stable across the table's own state updates, which otherwise
+  // recompute sorted rows and queue another pagination reset on every render.
+  const tableSorting = useMemo(
+    () => [{ id: PINNED_COLUMN_ID, desc: false }, ...sorting],
+    [sorting],
+  );
+  const table = useDataTable({
     data: rows,
     columns,
-    initialState: {
-      sorting: [{ id: defaultSortId, desc: false }],
+    state: {
+      sorting: tableSorting,
+      columnVisibility: { [PINNED_COLUMN_ID]: false },
     },
+    onSortingChange: (updater) =>
+      onSortingChange(
+        (typeof updater === "function"
+          ? updater(tableSorting)
+          : updater
+        ).filter((sort) => sort.id !== PINNED_COLUMN_ID),
+      ),
+    // The URL has no value for "unsorted", so a column stays sorted.
+    enableSortingRemoval: false,
     withSorting: true,
     getRowId: (row) => row.trackingKeywordId,
     enableRowSelection: true,
@@ -95,36 +118,16 @@ export function RankTrackingTable({
   const selectedCount = selectedRows.length;
   const selectedRankRows = selectedRows.map((row) => row.original);
 
-  const exportSelectionToSheets = () => {
-    const { headers, rows: exportRows } = buildRankTrackingExport(
-      selectedRankRows,
+  const exportSelection = (format: "csv" | "sheets") =>
+    exportRankTracking({
+      format,
+      rows: selectedRankRows,
       showDesktop,
       showMobile,
-    );
-    void exportTableToSheets({
-      headers,
-      rows: exportRows,
-      feature: "rank_tracking",
+      domain,
+      locationName,
+      scope: "selection",
     });
-  };
-
-  const exportSelectionCsv = () => {
-    const { headers, rows: exportRows } = buildRankTrackingExport(
-      selectedRankRows,
-      showDesktop,
-      showMobile,
-    );
-    const csvRows = exportRows.map((row) =>
-      row.map((cell, idx) =>
-        idx === 3 && typeof cell === "number" ? cell.toFixed(2) : cell,
-      ),
-    );
-    downloadCsv(
-      `rank-tracking-${domain}-selected.csv`,
-      buildCsv(headers, csvRows),
-    );
-    captureClientEvent("rank_tracking:export_csv", { scope: "selection" });
-  };
 
   const removeMutation = useMutation({
     mutationFn: (keywordIds: string[]) =>
@@ -138,30 +141,11 @@ export function RankTrackingTable({
       void queryClient.invalidateQueries({
         queryKey: ["rankTrackingCostEstimate", projectId, configId],
       });
-      toast.success(`已移除 ${result.removed} 个关键词`);
-    },
-    onError: (error) => {
-      toast.error(getStandardErrorMessage(error, "关键词移除失败"));
+      toast.success(
+        `${result.removed} keyword${result.removed !== 1 ? "s" : ""} removed`,
+      );
     },
   });
-
-  if (resultsLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="size-5 animate-spin text-base-content/50" />
-      </div>
-    );
-  }
-
-  if (rows.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-base-300 p-10 text-center text-sm text-base-content/55">
-        {totalCount === 0
-          ? "暂无排名数据。点击“立即检查”运行首次检查。"
-          : "没有关键词符合搜索条件。"}
-      </div>
-    );
-  }
 
   return (
     <>
@@ -175,19 +159,19 @@ export function RankTrackingTable({
               onClick={() => setShowConfirm(true)}
               variant="danger"
             >
-              移除
+              Remove
             </TableBulkActionButton>
             <TableBulkExportMenu
               actions={[
                 {
                   label: "导出到 Google 表格",
                   icon: <Sheet className="size-4" />,
-                  onClick: exportSelectionToSheets,
+                  onClick: () => exportSelection("sheets"),
                 },
                 {
                   label: "导出 CSV",
                   icon: <FileDown className="size-4" />,
-                  onClick: exportSelectionCsv,
+                  onClick: () => exportSelection("csv"),
                 },
               ]}
             />
@@ -195,40 +179,18 @@ export function RankTrackingTable({
         }
       />
 
-      {/* Confirm modal */}
       {showConfirm && (
-        <Modal
+        <ConfirmDialog
+          title="移除关键词？"
+          confirmLabel={`移除 ${selectedCount} 个关键词`}
+          destructive
+          pending={removeMutation.isPending}
+          onConfirm={() => removeMutation.mutate(selectedRows.map((r) => r.id))}
           onClose={() => setShowConfirm(false)}
-          labelledBy="remove-keywords-title"
         >
-          <h3 id="remove-keywords-title" className="text-lg font-semibold">
-            移除关键词？
-          </h3>
-          <p className="text-sm text-base-content/70">
-            此操作将停止追踪 {selectedCount}{" "}
-            个关键词。历史排名数据会保留，但不会继续显示在表格中。
-          </p>
-          <div className="flex justify-end gap-2">
-            <button
-              className="btn btn-ghost btn-sm"
-              onClick={() => setShowConfirm(false)}
-            >
-              取消
-            </button>
-            <button
-              className="btn btn-error btn-sm gap-1"
-              onClick={() =>
-                removeMutation.mutate(selectedRows.map((r) => r.id))
-              }
-              disabled={removeMutation.isPending}
-            >
-              {removeMutation.isPending && (
-                <Loader2 className="size-3 animate-spin" />
-              )}
-              移除 {selectedCount} 个关键词
-            </button>
-          </div>
-        </Modal>
+          将停止追踪这 {selectedCount}{" "}
+          个关键词。历史排名会保留，但不会出现在表格中。
+        </ConfirmDialog>
       )}
 
       {trendTarget && (
@@ -238,16 +200,35 @@ export function RankTrackingTable({
           configId={configId}
           domain={domain}
           locationCode={locationCode}
+          languageCode={languageCode}
           locationName={locationName ?? undefined}
           serpDepth={serpDepth}
           onClose={() => setTrendTarget(null)}
         />
       )}
 
-      <AppDataTable table={table} getCellClassName={() => "align-top"} />
-      <p className="text-xs text-base-content/60 pt-2">
-        当前显示 {rows.length} / {totalCount} 个关键词
-      </p>
+      <DataTable
+        table={table}
+        isFiltered={totalCount > 0}
+        onClearFilters={onClearFilters}
+        empty={{
+          title: "还没有关键词",
+          description: "添加要为此域名追踪的关键词。",
+          action: (
+            <Button size="sm" onClick={onAddKeywords}>
+              <Plus data-icon="inline-start" />
+              添加关键词
+            </Button>
+          ),
+        }}
+        footer={
+          rows.length > 0 ? (
+            <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
+              {rows.length} / {totalCount} 个关键词
+            </p>
+          ) : null
+        }
+      />
     </>
   );
 }

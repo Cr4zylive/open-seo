@@ -1,22 +1,60 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
+import { SectionHeader } from "@/client/components/PageHeader";
+import { PermissionHint } from "@/client/components/PermissionHint";
+import { QueryError } from "@/client/components/QueryState";
+import { SkeletonCard } from "@/client/components/SkeletonPresets";
+import { Button } from "@/client/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCard,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
 import {
   InviteTeammateModal,
+  announceInvitation,
   inviteErrorMessage,
 } from "@/client/features/team/InviteTeammateModal";
 import { organizationContextQueryOptions } from "@/client/features/team/organizationQueries";
-import { InvitationRow, MemberRow } from "@/client/features/team/TeamTableRows";
+import {
+  InvitationRow,
+  MemberRow,
+  type Member,
+} from "@/client/features/team/TeamTableRows";
+import { TransferOwnershipModal } from "@/client/features/team/TransferOwnershipModal";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { authClient, useSession } from "@/lib/auth-client";
 import { hasOrgPermission } from "@/lib/org-permissions";
 import { getTeam, sendTeamInvitation } from "@/serverFunctions/organization";
+
+const RESEND_KEY = ["team", "resend-invitation"];
+const REMOVE_KEY = ["team", "remove-member"];
+const CANCEL_KEY = ["team", "cancel-invitation"];
+
+// Every in-flight call for one action, so each row stays disabled while its
+// own request runs even when another row starts the same action.
+function usePendingVariables(mutationKey: string[]) {
+  return useMutationState({
+    filters: { mutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables,
+  });
+}
 
 // The Organization tab of account settings: who has access to the active org.
 export function TeamSettings() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
   const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<Member | null>(null);
 
   const orgContextQuery = useQuery(organizationContextQueryOptions());
 
@@ -34,10 +72,11 @@ export function TeamSettings() {
   // Same server call as inviting: for an already-pending address it re-mails
   // the same link with a refreshed expiry.
   const resendMutation = useMutation({
+    mutationKey: RESEND_KEY,
     mutationFn: (email: string) => sendTeamInvitation({ data: { email } }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       captureClientEvent("team:invitation_resend");
-      toast.success("邀请已重新发送");
+      announceInvitation(result, "邀请已重新发送");
       void refreshTeam();
     },
     onError: (error: Error) => {
@@ -46,6 +85,7 @@ export function TeamSettings() {
   });
 
   const removeMemberMutation = useMutation({
+    mutationKey: REMOVE_KEY,
     mutationFn: async (memberId: string) => {
       const result = await authClient.organization.removeMember({
         memberIdOrEmail: memberId,
@@ -59,12 +99,10 @@ export function TeamSettings() {
       toast.success("已移除成员");
       void refreshTeam();
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "无法移除该成员。");
-    },
   });
 
   const cancelInvitationMutation = useMutation({
+    mutationKey: CANCEL_KEY,
     mutationFn: async (invitationId: string) => {
       const result = await authClient.organization.cancelInvitation({
         invitationId,
@@ -80,10 +118,11 @@ export function TeamSettings() {
       toast.success("邀请已取消");
       void refreshTeam();
     },
-    onError: (error: Error) => {
-      toast.error(error.message || "无法取消该邀请。");
-    },
   });
+
+  const pendingResends = usePendingVariables(RESEND_KEY);
+  const pendingRemovals = usePendingVariables(REMOVE_KEY);
+  const pendingCancels = usePendingVariables(CANCEL_KEY);
 
   const role = orgContextQuery.data?.role ?? "member";
   const canManageTeam = hasOrgPermission(role, { invitation: ["create"] });
@@ -94,57 +133,56 @@ export function TeamSettings() {
   const members = teamQuery.data?.members ?? [];
   const pendingInvitations = teamQuery.data?.pendingInvitations ?? [];
 
-  if (teamQuery.isError) {
-    return (
-      <div className="space-y-3">
-        <p className="text-sm text-base-content/70">
-          暂时无法加载团队信息。
-        </p>
-        <button
-          type="button"
-          className="btn btn-soft btn-sm"
-          onClick={() => void teamQuery.refetch()}
-        >
-          重试
-        </button>
-      </div>
-    );
-  }
+  // The team query waits on the org context, so a failed context would
+  // otherwise leave the team spinner up for good. A failed refetch keeps the
+  // loaded table, with the error above it.
+  const failedQuery = [orgContextQuery, teamQuery].find(
+    (query) => query.isError,
+  );
+  const loadError = failedQuery ? (
+    <QueryError
+      error={failedQuery.error}
+      fallback="暂时无法加载团队。"
+      onRetry={() => void failedQuery.refetch()}
+      isRetrying={failedQuery.isFetching}
+    />
+  ) : null;
+  if (failedQuery && failedQuery.data === undefined) return loadError;
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-sm font-medium text-base-content/50">成员</h2>
-        {canManageTeam ? (
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => setIsInviteOpen(true)}
-          >
-            邀请同事
-          </button>
-        ) : null}
-      </div>
-      <p className="text-sm text-base-content/60">
-        同事将以管理员身份加入。管理员除账单外可访问每个项目。
+      <SectionHeader
+        title="成员"
+        action={
+          canManageTeam ? (
+            <Button size="sm" onClick={() => setIsInviteOpen(true)}>
+              邀请同事
+            </Button>
+          ) : null
+        }
+      />
+      <p className="text-sm text-muted-foreground">
+        同事以管理员身份加入。管理员可访问每个项目，账单除外。
       </p>
+      {orgContextQuery.isSuccess && !canManageTeam ? (
+        <PermissionHint action="邀请或移除成员" />
+      ) : null}
+      {loadError}
 
       {teamQuery.isPending ? (
-        <div className="flex justify-center py-6">
-          <span className="loading loading-spinner loading-md" />
-        </div>
+        <SkeletonCard />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-base-300">
-          <table className="table table-sm">
-            <thead>
-              <tr>
-                <th>成员</th>
-                <th>角色</th>
-                <th>状态</th>
-                <th className="w-10"></th>
-              </tr>
-            </thead>
-            <tbody>
+        <TableCard>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>成员</TableHead>
+                <TableHead>角色</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {members.map((member) => (
                 <MemberRow
                   key={member.id}
@@ -152,8 +190,9 @@ export function TeamSettings() {
                   isSelf={member.userId === session?.user?.id}
                   canManageTeam={canManageTeam}
                   isOwner={isOwner}
-                  isRemoving={removeMemberMutation.isPending}
+                  isRemoving={pendingRemovals.includes(member.id)}
                   onRemove={() => removeMemberMutation.mutate(member.id)}
+                  onTransferOwnership={() => setTransferTarget(member)}
                 />
               ))}
               {pendingInvitations.map((invitation) => (
@@ -161,18 +200,33 @@ export function TeamSettings() {
                   key={invitation.id}
                   invitation={invitation}
                   canManageTeam={canManageTeam}
-                  isResending={resendMutation.isPending}
-                  isCanceling={cancelInvitationMutation.isPending}
+                  isResending={pendingResends.includes(invitation.email)}
+                  isCanceling={pendingCancels.includes(invitation.id)}
                   onResend={() => resendMutation.mutate(invitation.email)}
                   onCancel={() =>
                     cancelInvitationMutation.mutate(invitation.id)
                   }
                 />
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </TableCard>
       )}
+
+      {transferTarget ? (
+        <TransferOwnershipModal
+          member={transferTarget}
+          onClose={() => setTransferTarget(null)}
+          onTransferred={() => {
+            // The caller's own role changed too: refresh the org context that
+            // gates the team and billing UI, not only the member list.
+            void refreshTeam();
+            void queryClient.invalidateQueries({
+              queryKey: organizationContextQueryOptions().queryKey,
+            });
+          }}
+        />
+      ) : null}
 
       {isInviteOpen ? (
         <InviteTeammateModal

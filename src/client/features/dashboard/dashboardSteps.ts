@@ -1,4 +1,11 @@
-import { Bot, FolderPlus, Globe, Search, Users } from "lucide-react";
+import {
+  Bot,
+  ClipboardCheck,
+  FolderPlus,
+  Globe,
+  Lightbulb,
+  Users,
+} from "lucide-react";
 import type { DashboardActivation } from "@/server/features/dashboard/services/DashboardService";
 import type { DashboardSetupStep } from "@/types/schemas/dashboard";
 
@@ -7,12 +14,42 @@ export const setupSteps: {
   label: string;
   detail: string;
   icon: typeof Globe;
+  skipLabel: string;
 }[] = [
   {
-    id: "domain",
-    label: "添加网站",
-    detail: "设置此项目的网站和国家/地区。",
+    id: "competitor",
+    label: "研究竞争对手",
+    detail: "找出值得学习的主题和链接。",
     icon: Globe,
+    skipLabel: "暂时跳过",
+  },
+  {
+    id: "keywords",
+    label: "获取关键词灵感",
+    detail: "从一个关键词出发，看看人们还在搜什么。",
+    icon: Lightbulb,
+    skipLabel: "暂时跳过",
+  },
+  {
+    id: "audit",
+    label: "审计你的网站",
+    detail: "抓取失效链接、缺失标签和可索引性问题。",
+    icon: ClipboardCheck,
+    skipLabel: "暂时跳过",
+  },
+  {
+    id: "mcp",
+    label: "连接 AI 智能体",
+    detail: "在 Claude 或你常用的智能体里使用 OpenSEO。",
+    icon: Bot,
+    skipLabel: "暂时跳过",
+  },
+  {
+    id: "team",
+    label: "邀请同事",
+    detail: "一起协作，或暂时自己用。",
+    icon: Users,
+    skipLabel: "暂时跳过",
   },
   {
     id: "project",
@@ -20,30 +57,7 @@ export const setupSteps: {
     detail:
       "再创建一个项目，或让 AI 智能体帮你配置一批站点。",
     icon: FolderPlus,
-  },
-  {
-    id: "competitor",
-    label: "研究竞争对手",
-    detail: "找出值得学习的主题和链接。",
-    icon: Search,
-  },
-  {
-    id: "mcp",
-    label: "连接 AI 智能体",
-    detail: "在 Claude 或你常用的智能体里使用 OpenSEO。",
-    icon: Bot,
-  },
-  {
-    id: "gsc",
-    label: "连接 Search Console",
-    detail: "把真实点击和查询词拉进来。",
-    icon: Search,
-  },
-  {
-    id: "team",
-    label: "邀请同事",
-    detail: "一起协作，或暂时自己用。",
-    icon: Users,
+    skipLabel: "我只需要一个项目",
   },
 ];
 
@@ -52,21 +66,19 @@ export function getStepStatus(
   step: DashboardSetupStep,
 ): "done" | "skipped" | "todo" {
   const completed: Record<DashboardSetupStep, boolean> = {
-    domain: activation.domain !== null,
-    project: activation.hasMultipleProjects,
-    competitor: activation.competitorClickedAt !== null,
+    competitor: activation.competitorResearchedAt !== null,
+    keywords: activation.keywordsResearchedAt !== null,
+    audit: activation.hasAudit,
     mcp:
       activation.mcp.authorizedAt !== null ||
       activation.mcp.firstToolCallAt !== null,
-    gsc: activation.gsc.connected,
     team: activation.hasTeammate,
+    project: activation.hasMultipleProjects,
   };
   if (completed[step]) return "done";
-  // Preserve previous MCP dismissals without treating them as authorization.
-  if (
-    activation.dismissedSteps.includes(step) ||
-    (step === "mcp" && activation.mcp.cardDismissedAt !== null)
-  )
-    return "skipped";
-  return "todo";
+  if (!activation.dismissedSteps.includes(step)) return "todo";
+  return completeWhenSkipped.has(step) ? "done" : "skipped";
 }
+
+// Skipping these marks them complete, so they never wait in "saved for later".
+const completeWhenSkipped = new Set<DashboardSetupStep>(["team", "project"]);

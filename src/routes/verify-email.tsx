@@ -1,6 +1,8 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Button } from "@/client/components/ui/button";
+import { Spinner } from "@/client/components/ui/spinner";
 import {
   AuthPageCard,
   AuthPageShell,
@@ -32,14 +34,14 @@ export const Route = createFileRoute("/verify-email")({
 function getVerificationErrorMessage(error: string | undefined) {
   switch ((error ?? "").toLowerCase()) {
     case "invalid_token":
-      return "This link is no longer valid. Request a new email to keep going.";
+      return "此链接已失效。请重新申请邮件以继续。";
     case "token_expired":
-      return "This link has expired. Request a new email to keep going.";
+      return "此链接已过期。请重新申请邮件以继续。";
     case "user_not_found":
-      return "We couldn't find this account anymore. Try creating it again.";
+      return "找不到此账户。请尝试重新创建。";
     default:
       return error
-        ? "We couldn't confirm this email. Request a new email and try again."
+        ? "无法确认此邮箱。请重新申请邮件后再试。"
         : null;
   }
 }
@@ -59,29 +61,29 @@ function getVerifyEmailPageCopy({
 }) {
   if (!isHostedMode) {
     return {
-      title: "Verify email",
-      helperText: "Email confirmation isn't available right now.",
+      title: "验证邮箱",
+      helperText: "邮箱确认暂时不可用。",
     };
   }
 
   if (errorMessage) {
     return {
-      title: "We couldn't confirm your email",
-      helperText: errorMessage,
+      title: "无法确认你的邮箱",
+      helperText: undefined,
     };
   }
 
   if (isRedirecting) {
     return {
-      title: "Email confirmed",
-      helperText: "You're all set. Taking you to your account now.",
+      title: "邮箱已确认",
+      helperText: "都好了。正在带你进入账户。",
     };
   }
 
   if (isPending) {
     return {
-      title: "Verify email",
-      helperText: "Checking your email confirmation.",
+      title: "验证邮箱",
+      helperText: "正在检查邮箱确认状态。",
     };
   }
 
@@ -90,10 +92,10 @@ function getVerifyEmailPageCopy({
   // unverified hosted user would be bounced straight back by the verification
   // gate.
   return {
-    title: "Verify your email",
+    title: "验证你的邮箱",
     helperText: email
-      ? `Click the link we sent to ${email} to verify your email.`
-      : "Check your inbox for the link to verify your email.",
+      ? `点击我们发到 ${email} 的链接以验证邮箱。`
+      : "请查看收件箱中的验证链接。",
   };
 }
 
@@ -172,15 +174,13 @@ function VerifyEmailPage() {
         callbackURL: callbackURL.toString(),
       });
       if (result.error) {
-        toast.error(result.error.message || "We couldn't send another email.");
+        toast.error(result.error.message || "无法再发送一封邮件。");
         return;
       }
       captureClientEvent("auth:verification_resend");
-      toast.success("A new email is on the way.");
+      toast.success("新邮件已在路上。");
     } catch {
-      toast.error(
-        "We couldn't send another email right now. Please try again.",
-      );
+      toast.error("暂时无法再发送邮件，请重试。");
     } finally {
       setIsResending(false);
     }
@@ -196,39 +196,29 @@ function VerifyEmailPage() {
             <Link
               to="/sign-in"
               search={getSignInSearch(redirectTo)}
-              className="text-base-content/50 hover:text-base-content transition-colors"
+              className="text-muted-foreground hover:text-foreground transition-colors"
             >
-              Back to sign in
+              返回登录
             </Link>
           </p>
         }
       >
         {!isHostedMode ? null : errorMessage ? (
-          <div className="space-y-3">
-            <div className="alert alert-error">
-              <span>{errorMessage}</span>
-            </div>
-            <Link
-              to="/sign-in"
-              search={getSignInSearch(redirectTo)}
-              className="btn btn-soft w-full"
-            >
-              Back to sign in
-            </Link>
-          </div>
+          <p className="text-sm text-destructive">{errorMessage}</p>
         ) : isPending || isRedirecting ? (
           <div className="flex justify-center py-4">
-            <span className="loading loading-spinner loading-md" />
+            <Spinner />
           </div>
         ) : email ? (
-          <button
+          <Button
             type="button"
-            className="btn btn-soft w-full"
+            variant="secondary"
+            className="w-full"
+            pending={isResending}
             onClick={() => void handleResend()}
-            disabled={isResending}
           >
-            {isResending ? "Sending email..." : "Resend email"}
-          </button>
+            {isResending ? "正在发送邮件…" : "重新发送邮件"}
+          </Button>
         ) : null}
       </AuthPageCard>
     </AuthPageShell>

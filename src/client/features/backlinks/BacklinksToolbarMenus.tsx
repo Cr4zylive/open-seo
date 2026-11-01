@@ -1,94 +1,54 @@
-import { useState } from "react";
+import { ChevronDown, Gauge, Link2, MoreHorizontal } from "lucide-react";
+import { Button } from "@/client/components/ui/button";
 import {
-  ChevronDown,
-  Download,
-  Gauge,
-  MoreHorizontal,
-  Sheet,
-} from "lucide-react";
-import type { CsvValue } from "@/client/lib/csv";
-import { exportTableToSheets } from "@/client/lib/exportToSheets";
-import type { BacklinksSearchState } from "./backlinksPageTypes";
-import { exportBacklinksTabCsv } from "./export";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/client/components/ui/dropdown-menu";
+import { Spinner } from "@/client/components/ui/spinner";
+import { DEFAULT_BACKLINKS_SPAM_THRESHOLD } from "@/types/schemas/backlinks";
 
-export function BacklinksExportMenu({
-  activeTab,
-  exportTarget,
-  headers,
-  rows,
+export function BacklinksBestLinksMenu({
+  hideSpam,
+  onHideSpamChange,
 }: {
-  activeTab: BacklinksSearchState["tab"];
-  exportTarget: string;
-  headers: string[];
-  rows: CsvValue[][];
+  hideSpam: boolean;
+  onHideSpamChange: (hideSpam: boolean) => void;
 }) {
-  const [isExportingSheets, setIsExportingSheets] = useState(false);
-  const canExport = rows.length > 0 && !isExportingSheets;
-
-  const handleExportToSheets = async () => {
-    if (!canExport) return;
-    setIsExportingSheets(true);
-    try {
-      await exportTableToSheets({
-        headers,
-        rows,
-        feature: `backlinks_${activeTab}`,
-      });
-    } finally {
-      setIsExportingSheets(false);
-    }
-  };
-
   return (
-    <div className="dropdown dropdown-end">
-      <div
-        tabIndex={0}
-        role="button"
-        className={`btn btn-sm btn-ghost gap-1 ${rows.length === 0 ? "btn-disabled" : ""}`}
-        aria-label="导出反向链接表格"
-      >
-        <Download className="size-4" />
-        导出
-        <ChevronDown className="size-3 opacity-60" />
-      </div>
-      <ul
-        tabIndex={0}
-        role="menu"
-        className="dropdown-content z-10 menu p-2 shadow-lg bg-base-100 border border-base-300 rounded-box w-56"
-      >
-        <li>
-          <button
-            type="button"
-            onClick={() => void handleExportToSheets()}
-            disabled={!canExport}
-          >
-            {isExportingSheets ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <Sheet className="size-4" />
-            )}
-            导出到 Google 表格
-          </button>
-        </li>
-        <li>
-          <button
-            type="button"
-            onClick={() =>
-              exportBacklinksTabCsv({
-                tab: activeTab,
-                target: exportTarget,
-                headers,
-                rows,
-              })
-            }
-            disabled={rows.length === 0}
-          >
-            <Download className="size-4" />
-            导出 CSV
-          </button>
-        </li>
-      </ul>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="sm" />}>
+        <Link2 data-icon="inline-start" />
+        优质链接：{hideSpam ? "开" : "关"}
+        <ChevronDown data-icon="inline-end" className="opacity-60" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72">
+        <DropdownMenuRadioGroup
+          value={hideSpam ? "best" : "all"}
+          onValueChange={(value) => onHideSpamChange(value === "best")}
+        >
+          <DropdownMenuRadioItem value="best">
+            <span>
+              <span className="block">仅优质链接</span>
+              <span className="block text-xs text-muted-foreground">
+                分数低于 {DEFAULT_BACKLINKS_SPAM_THRESHOLD} 或未知
+              </span>
+            </span>
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="all">
+            <span>
+              <span className="block">全部链接（含垃圾链接）</span>
+              <span className="block text-xs text-muted-foreground">
+                包含分数 ≥ {DEFAULT_BACKLINKS_SPAM_THRESHOLD} 的链接
+              </span>
+            </span>
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -102,37 +62,29 @@ export function BacklinksActionsMenu({
   ratableDomains: string[];
 }) {
   return (
-    <div className="dropdown dropdown-end">
-      <div
-        tabIndex={0}
-        role="button"
-        className="btn btn-sm btn-ghost btn-square"
-        aria-label="反向链接表格操作"
-        title="反向链接表格操作"
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="反向链接表格操作"
+            title="反向链接表格操作"
+          />
+        }
       >
-        <MoreHorizontal className="size-4" />
-      </div>
-      <ul
-        tabIndex={0}
-        role="menu"
-        className="dropdown-content z-10 menu p-2 shadow-lg bg-base-100 border border-base-300 rounded-box w-52"
-      >
-        <li>
-          <button
-            type="button"
-            onClick={() => void loadRatings(ratableDomains)}
-            disabled={isLoadingRatings}
-            title="查询表格中各域名的 Ahrefs 域名评级"
-          >
-            {isLoadingRatings ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <Gauge className="size-4" />
-            )}
-            Ahrefs DR
-          </button>
-        </li>
-      </ul>
-    </div>
+        <MoreHorizontal />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem
+          onClick={() => void loadRatings(ratableDomains)}
+          disabled={isLoadingRatings}
+          title="查询表格中各域名的 Ahrefs 域名评级"
+        >
+          {isLoadingRatings ? <Spinner /> : <Gauge />}
+          Ahrefs DR
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

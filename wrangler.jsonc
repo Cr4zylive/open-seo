@@ -15,9 +15,11 @@
   // Dashboard secrets/vars (DATAFORSEO_API_KEY, TEAM_DOMAIN, POLICY_AUD)
   // survive `wrangler deploy` from Cloudflare Git.
   "keep_vars": true,
-  // Smart Placement relocates only the `fetch` handler (cron + Workflow runs
-  // stay at the edge) toward external subrequests — Postgres via Hyperdrive,
-  // SEO APIs — not D1/KV/R2 bindings, so it's a DB no-op on the D1 default.
+  // Smart Placement moves only the `fetch` handler (cron, Workflow, and RPC)
+  // runs are unaffected); local dev and Docker ignore it. Hosted prod
+  // overrides it with a us-east-1 region pin next to its Postgres
+  // (deploy/alchemy/alchemy.run.ts), which the legacy `pnpm run deploy` would
+  // undo: it targets the same prod script.
   // Must live here: a dashboard-only toggle is wiped by `wrangler deploy`.
   "placement": {
     "mode": "smart",
@@ -38,6 +40,16 @@
       "name": "rank-check-workflow",
       "binding": "RANK_CHECK_WORKFLOW",
       "class_name": "RankCheckWorkflow",
+    },
+    {
+      "name": "ai-visibility-workflow",
+      "binding": "AI_VISIBILITY_WORKFLOW",
+      "class_name": "AiVisibilityWorkflow",
+    },
+    {
+      "name": "local-rank-workflow",
+      "binding": "LOCAL_RANK_WORKFLOW",
+      "class_name": "LocalRankWorkflow",
     },
   ],
   // Durable Object backing the SAM in-app agent (Agents SDK AIChatAgent). One
@@ -63,10 +75,10 @@
   // production branch and `npx wrangler versions upload` on every other
   // branch. The latter cannot apply Durable Object migrations (API 10211)
   // and never creates open-seo-audit (API 10143). Set BOTH dashboard deploy
-  // commands to `pnpm run deploy` (docs/SELF_HOSTING_CLOUDFLARE_LEGACY.md).
-  // That script also unsets WRANGLER_CI_OVERRIDE_NAME for the audit Worker:
-  // Builds would otherwise upload it as open-seo and replay
-  // new_sqlite_classes AuditScratchpad (API 10074).
+  // commands to `pnpm run deploy`. That script also unsets
+  // WRANGLER_CI_OVERRIDE_NAME for the audit Worker: Builds would otherwise
+  // upload it as open-seo and replay new_sqlite_classes AuditScratchpad
+  // (API 10074).
   "services": [
     {
       "binding": "AUDIT_ENGINE",
@@ -111,7 +123,7 @@
   },
   // This config serves local dev and Docker self-host only. All Cloudflare
   // deployments — previews, prod, self-host — go through Alchemy
-  // (alchemy.run.ts), which provisions real resources per stage and never
+  // (deploy/alchemy/alchemy.run.ts), which provisions real resources per stage and never
   // reads these ids.
   //
   // The ids below are NOT dead config: miniflare derives its on-disk storage
@@ -133,7 +145,7 @@
       "binding": "DB",
       "database_name": "open-seo",
       "database_id": "a3103d08-79bf-4bd1-bec4-3ab2c9aa78c7",
-      "migrations_dir": "drizzle",
+      "migrations_dir": "drizzle/sqlite",
     },
   ],
   // Postgres scale path (opt-in; D1 is the default). Hyperdrive is the ONLY way

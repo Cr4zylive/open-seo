@@ -1,14 +1,17 @@
 import * as React from "react";
+import { projectsQueryOptions } from "@/client/features/projects/projectQueries";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus } from "lucide-react";
 import { toast } from "sonner";
 import {
   getArchivedProjects,
-  getProjects,
   restoreProject,
 } from "@/serverFunctions/projects";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import { PageHeader, SectionHeader } from "@/client/components/PageHeader";
+import { QueryState } from "@/client/components/QueryState";
+import { Badge } from "@/client/components/ui/badge";
+import { Button } from "@/client/components/ui/button";
 import { getLastProjectId } from "@/client/lib/active-project";
 import { CreateProjectModal } from "@/client/features/projects/CreateProjectModal";
 
@@ -25,66 +28,57 @@ function ProjectsPage() {
   React.useEffect(() => {
     setCurrentProjectId(getLastProjectId());
   }, []);
-  const projectsQuery = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => getProjects(),
-  });
-  const projects = projectsQuery.data ?? [];
+  const projectsQuery = useQuery(projectsQueryOptions());
 
   return (
-    <div className="h-full overflow-auto bg-base-100 px-4 py-8 pb-24 md:px-6 md:py-12 md:pb-8">
-      <div className="mx-auto w-full max-w-2xl space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">项目</h1>
-            <p className="mt-1 text-sm text-base-content/60">
-              每个项目都有各自的 Search Console、排名追踪和审计数据。
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm shrink-0"
-            onClick={() => setCreating(true)}
-          >
-            <Plus className="size-4" />
-            新建项目
-          </button>
-        </div>
+    <div className="h-full overflow-auto px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <PageHeader
+          title="项目"
+          description="每个项目有各自的 Search Console、排名跟踪和审计。"
+          actions={
+            <Button onClick={() => setCreating(true)}>
+              <Plus data-icon="inline-start" />
+              新建项目
+            </Button>
+          }
+        />
 
-        {projectsQuery.isLoading ? (
-          <div className="flex justify-center py-10">
-            <span className="loading loading-spinner loading-md" />
-          </div>
-        ) : (
-          <ul className="divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300">
-            {projects.map((project) => (
-              <li key={project.id}>
-                <Link
-                  to="/p/$projectId/settings"
-                  params={{ projectId: project.id }}
-                  className="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-base-200/40"
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate font-medium">
-                        {project.name}
-                      </span>
-                      {project.id === currentProjectId ? (
-                        <span className="shrink-0 rounded-full bg-base-300/70 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-base-content/60">
-                          当前
+        <QueryState
+          query={projectsQuery}
+          errorFallback="无法加载项目"
+        >
+          {(data) => (
+            <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+              {data.map((project) => (
+                <li key={project.id}>
+                  <Link
+                    to="/p/$projectId/settings"
+                    params={{ projectId: project.id }}
+                    className="flex items-center justify-between gap-3 p-3 transition-colors hover:bg-muted"
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span className="flex items-center gap-2">
+                        <span className="truncate font-medium">
+                          {project.name}
                         </span>
-                      ) : null}
+                        {project.id === currentProjectId ? (
+                          <Badge variant="secondary" size="sm">
+                            当前
+                          </Badge>
+                        ) : null}
+                      </span>
+                      <span className="truncate text-xs text-muted-foreground">
+                        {project.domain ?? "尚未设置域名"}
+                      </span>
                     </span>
-                    <span className="truncate text-xs text-base-content/50">
-                      {project.domain ?? "尚未设置域名"}
-                    </span>
-                  </span>
-                  <ChevronRight className="size-4 shrink-0 text-base-content/40" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </QueryState>
 
         <ArchivedProjects />
       </div>
@@ -109,40 +103,40 @@ function ArchivedProjects() {
       restoreProject({ data: { archivedProjectId: projectId } }),
     onSuccess: async () => {
       // Prefix match invalidates both the active and archived lists.
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({
+        queryKey: projectsQueryOptions().queryKey,
+      });
       toast.success("项目已恢复");
     },
-    onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "项目恢复失败")),
   });
 
   if (archived.length === 0) return null;
 
   return (
     <section className="space-y-3">
-      <h2 className="text-sm font-medium text-base-content/50">已归档</h2>
-      <ul className="divide-y divide-base-300 overflow-hidden rounded-lg border border-base-300">
+      <SectionHeader title="已归档" />
+      <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
         {archived.map((project) => (
           <li
             key={project.id}
             className="flex items-center justify-between gap-3 p-3"
           >
             <span className="flex min-w-0 flex-col">
-              <span className="truncate font-medium text-base-content/70">
+              <span className="truncate font-medium text-muted-foreground">
                 {project.name}
               </span>
-              <span className="truncate text-xs text-base-content/50">
+              <span className="truncate text-xs text-muted-foreground">
                 {project.domain ?? "尚未设置域名"}
               </span>
             </span>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm shrink-0"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => restoreMutation.mutate(project.id)}
               disabled={restoreMutation.isPending}
             >
               恢复
-            </button>
+            </Button>
           </li>
         ))}
       </ul>

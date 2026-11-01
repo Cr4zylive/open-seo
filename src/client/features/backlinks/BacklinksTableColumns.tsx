@@ -1,14 +1,19 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronRight } from "lucide-react";
 import { SortableHeader } from "@/client/components/table/SortableHeader";
-import { HeaderHelpLabel } from "@/client/features/keywords/components";
-import { BacklinksSourceLink } from "./BacklinksPageLinks";
+import { HelpLabel } from "@/client/components/HelpLabel";
+import { SafeExternalLink } from "@/client/components/SafeExternalLink";
+import { Badge } from "@/client/components/ui/badge";
+import { Button } from "@/client/components/ui/button";
+import { Spinner } from "@/client/components/ui/spinner";
 import type { BacklinksRow } from "./backlinksPageTypes";
 import type { BacklinksRowsSortField } from "@/types/schemas/backlinks";
 import {
+  extractUrlPath,
   formatCompactDate,
   formatDecimal,
   formatNumber,
+  truncateMiddle,
 } from "./backlinksPageUtils";
 import type { DomainRatings } from "./useAhrefsDomainRatings";
 
@@ -27,24 +32,34 @@ export type BacklinksDisplayRow =
     }
   | { kind: "status"; domain: string; status: "loading" | "error" | "empty" };
 
+function BacklinksSourceLink({
+  url,
+  maxLength,
+  muted = false,
+}: {
+  url: string;
+  maxLength: number;
+  muted?: boolean;
+}) {
+  return (
+    <SafeExternalLink
+      url={url}
+      label={truncateMiddle(extractUrlPath(url), maxLength)}
+      className={`inline-flex items-center gap-1 break-all underline-offset-4 hover:underline ${muted ? "text-xs text-muted-foreground" : "text-sm"}`}
+    />
+  );
+}
+
 function BacklinkFlags({ row }: { row: BacklinksRow }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {row.isLost ? (
-        <span className="badge badge-sm badge-error badge-outline">已丢失</span>
-      ) : null}
-      {row.isBroken ? (
-        <span className="badge badge-sm badge-warning badge-outline">
-          已失效
-        </span>
-      ) : null}
+      {row.isLost ? <Badge variant="destructive">已丢失</Badge> : null}
+      {row.isBroken ? <Badge variant="warning">失效</Badge> : null}
       {row.isDofollow === false ? (
-        <span className="badge badge-sm badge-outline">Nofollow</span>
+        <Badge variant="outline">Nofollow</Badge>
       ) : null}
       {row.linksCount != null && row.linksCount > 1 ? (
-        <span className="badge badge-sm badge-outline min-w-fit whitespace-nowrap">
-          {row.linksCount} links
-        </span>
+        <Badge variant="outline">{row.linksCount} 条链接</Badge>
       ) : null}
     </div>
   );
@@ -53,15 +68,17 @@ function BacklinkFlags({ row }: { row: BacklinksRow }) {
 function StatusCell({ status }: { status: "loading" | "error" | "empty" }) {
   if (status === "loading") {
     return (
-      <span className="flex items-center gap-2 pl-6 text-sm text-base-content/60">
-        <span className="loading loading-spinner loading-xs" />
+      <span className="flex items-center gap-2 pl-6 text-sm text-muted-foreground">
+        <Spinner className="size-3.5" />
         正在加载链接…
       </span>
     );
   }
   return (
-    <span className="pl-6 text-sm text-base-content/60">
-      {status === "error" ? "无法加载此域名的链接。" : "此域名没有其他链接。"}
+    <span className="pl-6 text-sm text-muted-foreground">
+      {status === "error"
+        ? "无法加载此域名的链接。"
+        : "此域名没有其他链接。"}
     </span>
   );
 }
@@ -84,7 +101,7 @@ function SourceCell({
         {row.urlFrom ? (
           <BacklinksSourceLink url={row.urlFrom} maxLength={48} muted />
         ) : (
-          <span className="text-base-content/55">-</span>
+          <span className="text-muted-foreground">-</span>
         )}
       </div>
     );
@@ -94,17 +111,18 @@ function SourceCell({
   return (
     <div className="flex items-start gap-1.5 break-all">
       {expandable && row.domainFrom && onToggleDomain ? (
-        <button
-          type="button"
-          className="btn btn-ghost btn-xs btn-square shrink-0 -ml-1"
-          aria-label={`${expanded ? "隐藏" : "显示"} all links from ${domainLabel}`}
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          className="-ml-1 shrink-0"
+          aria-label={`${expanded ? "隐藏" : "显示"} ${domainLabel} 的全部链接`}
           aria-expanded={expanded}
           onClick={() => onToggleDomain(row.domainFrom ?? "")}
         >
           <ChevronRight
             className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`}
           />
-        </button>
+        </Button>
       ) : null}
       <div>
         <div className="font-semibold">{domainLabel}</div>
@@ -134,9 +152,8 @@ function buildBaseColumns(
     {
       id: "source",
       enableSorting: false,
-      header: () => <HeaderHelpLabel label="来源" helpText="链接到您的页面" />,
-      size: 250,
-      minSize: 180,
+      header: () => <HelpLabel label="来源" helpText="链接到你的页面" />,
+      meta: { headerClassName: "min-w-[200px]" },
       cell: ({ row }) => (
         <SourceCell displayRow={row.original} onToggleDomain={onToggleDomain} />
       ),
@@ -145,10 +162,9 @@ function buildBaseColumns(
       id: "target",
       enableSorting: false,
       header: () => (
-        <HeaderHelpLabel label="目标" helpText="您网站中的目标页面" />
+        <HelpLabel label="目标" helpText="你网站中的目标页面" />
       ),
-      size: 220,
-      minSize: 150,
+      meta: { headerClassName: "min-w-[180px]" },
       cell: linkCell((row) => (
         <div className="break-all">
           {row.urlTo ? (
@@ -163,15 +179,14 @@ function buildBaseColumns(
       id: "anchor",
       enableSorting: false,
       header: () => (
-        <HeaderHelpLabel label="锚文本" helpText="链接的文字或形式" />
+        <HelpLabel label="锚文本" helpText="链接的文字或形式" />
       ),
-      size: 150,
-      minSize: 100,
+      meta: { headerClassName: "min-w-[150px]" },
       cell: linkCell((row) => (
-        <div className="space-y-0.5 break-words">
+        <div className="space-y-0.5 wrap-anywhere">
           <span className="text-sm">{row.anchor || "无锚文本"}</span>
           {row.itemType ? (
-            <div className="text-xs text-base-content/55">{row.itemType}</div>
+            <div className="text-xs text-muted-foreground">{row.itemType}</div>
           ) : null}
         </div>
       )),
@@ -180,13 +195,12 @@ function buildBaseColumns(
       id: "flags",
       enableSorting: false,
       header: () => (
-        <HeaderHelpLabel
+        <HelpLabel
           label="标记"
           helpText="反向链接的特殊属性，例如已丢失、已失效、nofollow 或同一来源包含多条链接。"
         />
       ),
-      size: 130,
-      minSize: 80,
+      meta: { headerClassName: "min-w-[110px]" },
       cell: linkCell((row) => <BacklinkFlags row={row} />),
     },
     {
@@ -196,13 +210,11 @@ function buildBaseColumns(
       header: ({ column }) => (
         <SortableHeader
           column={column}
-          label="页面权威度"
+          label="链接"
           helpText="来源页面的权威度"
           align="right"
         />
       ),
-      size: 70,
-      minSize: 50,
       sortDescFirst: true,
       cell: linkCell((row) => (
         <div className="text-right tabular-nums text-sm">
@@ -222,8 +234,6 @@ function buildBaseColumns(
           align="right"
         />
       ),
-      size: 70,
-      minSize: 50,
       sortDescFirst: true,
       cell: linkCell((row) => (
         <div className="text-right tabular-nums text-sm">
@@ -238,19 +248,21 @@ function buildBaseColumns(
       header: ({ column }) => (
         <SortableHeader
           column={column}
-          label="垃圾风险"
+          label="Spam"
           helpText="此反向链接的预估垃圾风险。分数越高，越可能存在操纵性或质量较低。"
           align="right"
         />
       ),
-      size: 70,
-      minSize: 50,
       sortDescFirst: true,
       cell: linkCell((row) => {
         const value = row.spamScore;
         return (
           <div className="text-right tabular-nums text-sm">
-            {value != null && value > 0 ? Math.round(value) : null}
+            {value != null ? (
+              Math.round(value)
+            ) : (
+              <span title="垃圾分数未知">-</span>
+            )}
           </div>
         );
       }),
@@ -266,15 +278,13 @@ function buildBaseColumns(
           helpText="爬虫首次发现此链接的时间"
         />
       ),
-      size: 110,
-      minSize: 80,
       sortDescFirst: true,
       cell: linkCell((row) => (
         <div className="whitespace-nowrap text-sm">
           <div>{formatCompactDate(row.firstSeen)}</div>
           {row.lastSeen ? (
-            <div className="text-xs text-base-content/55">
-              最近检查 {formatCompactDate(row.lastSeen)}
+            <div className="text-xs text-muted-foreground">
+              Last {formatCompactDate(row.lastSeen)}
             </div>
           ) : null}
         </div>
@@ -302,20 +312,18 @@ export function buildBacklinksColumns(
     enableSorting: false,
     header: () => (
       <span className="flex w-full justify-end">
-        <HeaderHelpLabel
+        <HelpLabel
           label="Ahrefs DR"
           helpText="来源域名的 Ahrefs 域名评级（0 到 100）。"
         />
       </span>
     ),
-    size: 90,
-    minSize: 70,
     cell: linkCell((row) => {
       const domain = row.domainFrom?.replace(/^www\./, "");
       const dr = domain ? (ratings[domain] ?? null) : null;
       return (
         <div className="text-right tabular-nums text-sm">
-          {dr == null ? "—" : formatDecimal(dr)}
+          {dr == null ? "-" : formatDecimal(dr)}
         </div>
       );
     }),

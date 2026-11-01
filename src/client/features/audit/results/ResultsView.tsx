@@ -1,3 +1,4 @@
+import { MetricsTable } from "@/client/components/MetricsTable";
 import { useMemo, type ReactNode } from "react";
 import { ShieldAlert } from "lucide-react";
 import {
@@ -12,10 +13,23 @@ import {
   resolveIssueSeverity,
 } from "@/client/features/audit/results/IssuesView";
 import { PagesTable } from "@/client/features/audit/results/PagesTable";
+import { ShopifyCrawlWarning } from "@/client/features/audit/results/ShopifyCrawlWarning";
+import { RenderingWarnings } from "@/client/features/audit/results/RenderingWarnings";
+import { PerformanceTable } from "@/client/features/audit/results/ResultsTables";
 import {
-  ExportDropdown,
-  PerformanceTable,
-} from "@/client/features/audit/results/ResultsTables";
+  BotProtectionAdvice,
+  SCORE_TEXT_CLASS,
+  scoreTone,
+  SeverityBadge,
+} from "@/client/features/audit/shared";
+import { ExportMenu } from "@/client/components/ExportMenu";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@/client/components/ui/alert";
+import { DataTableTabs } from "@/client/components/table/DataTableToolbar";
+import { TabsTrigger } from "@/client/components/ui/tabs";
 
 type ResultsTab = "issues" | "pages" | "performance";
 
@@ -24,11 +38,14 @@ export function ResultsView({
   data,
   onTabChange,
   tab,
+  siteBlocked,
 }: {
   projectId: string;
   data: AuditResultsData;
   tab: string;
   onTabChange: (tab: ResultsTab) => void;
+  /** The page already says bot protection blocked the whole site. */
+  siteBlocked: boolean;
 }) {
   const { audit, pages, lighthouse, issues } = data;
   const crawlStopped = issues.some(
@@ -47,48 +64,85 @@ export function ResultsView({
     [pages],
   );
 
+  // Shopify stores get their own notice instead of the generic advice.
+  const shopifyLimited =
+    audit.config.sitePlatform === "shopify" &&
+    (blockedCount > 0 || rateLimitedCount > 0 || crawlStopped);
+
+  const tabs = (
+    <ResultsHeader
+      issueCount={issues.length}
+      pageCount={pages.length}
+      lighthouseCount={lighthouse.length}
+      hasPerformanceTab={hasPerformanceTab}
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      onExport={(format) => {
+        if (activeTab === "performance") {
+          exportPerformance(lighthouse, pages, format);
+          return;
+        }
+        if (activeTab === "issues") {
+          exportIssues(issues, format);
+          return;
+        }
+        exportPages(pages, format);
+      }}
+    />
+  );
+
   return (
     <>
-      {blockedCount > 0 && (
-        <CrawlWarning
-          headline={`有 ${blockedCount} 个页面被拦截。`}
-        >
-          网站的机器人防护拦截了我们的爬虫，这些页面无法审计。目前还没有绕过方法。在你自己电脑上运行的桌面爬虫通常能通过：可以试试{" "}
-          <a
-            className="link link-primary"
-            href="https://github.com/PhialsBasement/LibreCrawl"
-            target="_blank"
-            rel="noreferrer"
-          >
-            LibreCrawl
-          </a>{" "}
-          （免费开源）或{" "}
-          <a
-            className="link link-primary"
-            href="https://www.screamingfrog.co.uk/seo-spider/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Screaming Frog
-          </a>{" "}
-          （免费额度最多 500 个网址）。
-        </CrawlWarning>
+      {shopifyLimited && (
+        <ShopifyCrawlWarning
+          projectId={projectId}
+          audit={audit}
+          throttled={rateLimitedCount > 0 || crawlStopped}
+        />
       )}
 
-      {(rateLimitedCount > 0 || crawlStopped) && (
-        <CrawlWarning
-          headline={
-            crawlStopped
-              ? "抓取因网站限流提前停止。"
-              : `网站对 ${rateLimitedCount} 个页面进行了限流。`
-          }
-        >
-          {crawlStopped
-            ? "要求的冷却时间超过了审计时限，部分网址未被访问。本报告不完整。"
-            : "返回 429 Too Many Requests 的页面无法审计。"}
-          等限流重置后再重新运行审计，或请站点管理员允许 “OpenSEO-Audit” 爬虫。
-        </CrawlWarning>
+      {!shopifyLimited && !siteBlocked && blockedCount > 0 && (
+        <Alert variant="warning">
+          <ShieldAlert />
+          <AlertTitle>
+            机器人防护拦截了 {blockedCount} 个页面的抓取。
+          </AlertTitle>
+          <AlertDescription>
+            <BotProtectionAdvice
+              projectId={projectId}
+              rendered={audit.config.renderJavaScript === true}
+            />
+          </AlertDescription>
+        </Alert>
       )}
+
+      {!shopifyLimited && (rateLimitedCount > 0 || crawlStopped) && (
+        <Alert variant="warning">
+          <ShieldAlert />
+          <AlertTitle>
+            {crawlStopped
+              ? "抓取因网站限流提前停止。"
+              : `网站对 ${rateLimitedCount} 个页面触发了限流。`}
+          </AlertTitle>
+          <AlertDescription>
+            {crawlStopped
+              ? "网站持续拒绝请求，部分网址未被访问。此报告不完整。"
+              : "返回 429 Too Many Requests 的页面无法审计。"}
+            请等限流恢复后重新审计，或请站点所有者放行{" "}
+            <a
+              className="underline underline-offset-4"
+              href="https://openseo.so/docs/crawler"
+              target="_blank"
+              rel="noreferrer"
+            >
+              OpenSEO-Audit crawler
+            </a>
+            .
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <RenderingWarnings data={data} />
 
       <StatsStrip
         pagesCrawled={audit.pagesCrawled}
@@ -98,66 +152,25 @@ export function ResultsView({
         lighthouseSummary={stats.lighthouseSummary}
       />
 
-      <div className="card bg-base-100 border border-base-300">
-        <div className="card-body gap-3">
-          <ResultsHeader
-            issueCount={issues.length}
-            pageCount={pages.length}
-            lighthouseCount={lighthouse.length}
-            hasPerformanceTab={hasPerformanceTab}
-            activeTab={activeTab}
-            onTabChange={onTabChange}
-            onExport={(format) => {
-              if (activeTab === "performance") {
-                exportPerformance(lighthouse, pages, format);
-                return;
-              }
-              if (activeTab === "issues") {
-                exportIssues(issues, format);
-                return;
-              }
-              exportPages(pages, format);
-            }}
-          />
-
-          {activeTab === "issues" && <IssuesView issues={issues} />}
-          {activeTab === "pages" && (
-            <PagesTable
-              pages={pages}
-              startUrl={audit.startUrl}
-              issues={issues}
-            />
-          )}
-          {activeTab === "performance" && lighthouse.length > 0 && (
-            <PerformanceTable
-              auditId={audit.id}
-              projectId={projectId}
-              lighthouse={lighthouse}
-              pages={pages}
-            />
-          )}
-        </div>
-      </div>
+      {activeTab === "issues" && <IssuesView issues={issues} tabs={tabs} />}
+      {activeTab === "pages" && (
+        <PagesTable
+          pages={pages}
+          startUrl={audit.startUrl}
+          issues={issues}
+          tabs={tabs}
+        />
+      )}
+      {activeTab === "performance" && (
+        <PerformanceTable
+          auditId={audit.id}
+          projectId={projectId}
+          lighthouse={lighthouse}
+          pages={pages}
+          tabs={tabs}
+        />
+      )}
     </>
-  );
-}
-
-/** Banner for pages the crawler could not read (bot protection, rate limits). */
-function CrawlWarning({
-  headline,
-  children,
-}: {
-  headline: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-sm">
-      <ShieldAlert className="mt-0.5 size-4 shrink-0 text-warning" />
-      <p>
-        <span className="font-medium">{headline}</span>{" "}
-        <span className="text-base-content/70">{children}</span>
-      </p>
-    </div>
   );
 }
 
@@ -236,28 +249,22 @@ function ResultsHeader({
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-      <div role="tablist" className="tabs tabs-border w-fit">
-        {tabs.map(({ label, tab }) => {
-          const isActive = activeTab === tab;
-
-          return (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              className={`tab ${isActive ? "tab-active" : ""}`}
-              onClick={() => onTabChange(tab)}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      <ExportDropdown onExport={onExport} />
-    </div>
+    <DataTableTabs
+      value={activeTab}
+      onValueChange={(value) => {
+        const next = tabs.find((item) => item.tab === value);
+        if (next) onTabChange(next.tab);
+      }}
+      actions={
+        <ExportMenu actions={["sheets", "csv", "json"]} onExport={onExport} />
+      }
+    >
+      {tabs.map(({ label, tab }) => (
+        <TabsTrigger key={tab} value={tab}>
+          {label}
+        </TabsTrigger>
+      ))}
+    </DataTableTabs>
   );
 }
 
@@ -301,13 +308,23 @@ function StatsStrip({
       value: String(issues.length),
       valueClass: issues.length === 0 ? "text-success" : "",
       sub: issues.length > 0 && (
-        <span className="flex items-center gap-2.5">
-          <SeverityCount count={severityCounts.critical} dotClass="bg-error" />
-          <SeverityCount count={severityCounts.warning} dotClass="bg-warning" />
-          <SeverityCount
-            count={severityCounts.info}
-            dotClass="bg-base-content/30"
-          />
+        <span className="flex flex-wrap items-center gap-1">
+          {(["critical", "warning", "info"] as const).map((severity) =>
+            severityCounts[severity] > 0 ? (
+              <SeverityBadge
+                key={severity}
+                severity={severity}
+                title={severity}
+              >
+                {severity === "critical"
+                  ? "严重"
+                  : severity === "warning"
+                    ? "警告"
+                    : "提示"}{" "}
+                {severityCounts[severity]}
+              </SeverityBadge>
+            ) : null,
+          )}
         </span>
       ),
     },
@@ -318,7 +335,7 @@ function StatsStrip({
     items.push(
       { label: "Lighthouse 测试", value: String(totalLighthouse) },
       {
-        label: "Lighthouse 平均性能",
+        label: "Lighthouse 性能",
         value:
           lighthouseSummary.avgPerformance == null
             ? "-"
@@ -326,7 +343,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgPerformance),
       },
       {
-        label: "Lighthouse 平均 SEO",
+        label: "Lighthouse SEO",
         value:
           lighthouseSummary.avgSeo == null
             ? "-"
@@ -334,7 +351,7 @@ function StatsStrip({
         valueClass: scoreClass(lighthouseSummary.avgSeo),
       },
       {
-        label: "Lighthouse 平均无障碍",
+        label: "Lighthouse 无障碍",
         value:
           lighthouseSummary.avgAccessibility == null
             ? "-"
@@ -345,58 +362,29 @@ function StatsStrip({
         label: "Lighthouse 失败次数",
         value: String(lighthouseSummary.failed),
         valueClass:
-          lighthouseSummary.failed > 0 ? "text-error" : "text-success",
+          lighthouseSummary.failed > 0 ? "text-destructive" : "text-success",
       },
     );
   }
 
-  const columnsClass =
-    items.length === 3
-      ? "grid-cols-1 sm:grid-cols-3"
-      : "grid-cols-2 md:grid-cols-4";
-
   return (
-    <div
-      className={`grid ${columnsClass} gap-px rounded-lg border border-base-300 bg-base-300/70 overflow-hidden`}
-    >
-      {items.map((item) => (
-        <div key={item.label} className="bg-base-100 px-4 py-3">
-          <p className="text-[11px] uppercase tracking-wider text-base-content/50">
-            {item.label}
-          </p>
-          <p
-            className={`text-xl font-semibold mt-0.5 tabular-nums ${item.valueClass ?? ""}`}
-          >
-            {item.value}
-          </p>
-          {item.sub && (
-            <div className="text-xs text-base-content/60 mt-1">{item.sub}</div>
-          )}
-        </div>
-      ))}
+    <div className="w-full max-w-xl rounded-lg border border-border bg-card p-3">
+      <MetricsTable
+        rows={items.map((item) => ({
+          label: (
+            <div className="flex flex-wrap items-center gap-2">
+              {item.label}
+              {item.sub || null}
+            </div>
+          ),
+          value: <span className={item.valueClass}>{item.value}</span>,
+        }))}
+      />
     </div>
   );
 }
 
-function SeverityCount({
-  count,
-  dotClass,
-}: {
-  count: number;
-  dotClass: string;
-}) {
-  if (count === 0) return null;
-  return (
-    <span className="flex items-center gap-1 tabular-nums">
-      <span className={`size-1.5 rounded-full ${dotClass}`} />
-      {count}
-    </span>
-  );
-}
-
 function scoreClass(score: number | null) {
-  if (score == null) return "";
-  if (score >= 90) return "text-success";
-  if (score >= 50) return "text-warning";
-  return "text-error";
+  const tone = scoreTone(score);
+  return tone ? SCORE_TEXT_CLASS[tone] : "";
 }

@@ -1,18 +1,44 @@
 import { useMemo, useState } from "react";
-import { Copy, Download, Loader2 } from "lucide-react";
+import { Copy, Download, ExternalLink } from "lucide-react";
 import { reverse, sortBy } from "remeda";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { Modal } from "@/client/components/Modal";
-import { buildCsv, downloadCsv } from "@/client/lib/csv";
+import { QueryState } from "@/client/components/QueryState";
+import { Skeleton } from "@/client/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/client/components/ui/tooltip";
+import { Button } from "@/client/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/client/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
+import { buildCsv, type CsvValue } from "@/client/lib/csv";
+import { exportRows } from "@/client/lib/exportRows";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { getRankKeywordHistory } from "@/serverFunctions/rank-tracking";
 import type { RankKeywordHistoryPoint } from "@/serverFunctions/rank-tracking";
 import { LOCATIONS } from "@/client/features/keywords/locations";
 import { formatLocationLabel } from "@/shared/keyword-locations";
+import { googleSerpUrl } from "@/shared/google-serp-url";
 import { csvChange, DeviceRankCell } from "./RankTrackingTableParts";
 import {
   RankTrendChart,
+  TrendEmptyState,
   TrendRangeToggle,
   type TrendSeries,
 } from "./RankTrackingTrendChart";
@@ -22,7 +48,7 @@ const DEVICE_STYLE: Record<
   { label: string; color: string }
 > = {
   desktop: { label: "桌面端", color: "#2563eb" },
-  mobile: { label: "移动端", color: "#14b8a6" },
+  mobile: { label: "移动端", color: "#e69f00" },
 };
 
 export interface KeywordTrendTarget {
@@ -36,6 +62,7 @@ export function KeywordTrendModal({
   configId,
   domain,
   locationCode,
+  languageCode,
   locationName,
   serpDepth,
   onClose,
@@ -45,13 +72,14 @@ export function KeywordTrendModal({
   configId: string;
   domain: string;
   locationCode: number;
+  languageCode: string;
   locationName?: string;
   serpDepth: number;
   onClose: () => void;
 }) {
   const [sinceDays, setSinceDays] = useState(730);
 
-  const { data: history, isLoading } = useQuery({
+  const historyQuery = useQuery({
     queryKey: [
       "rankKeywordHistory",
       projectId,
@@ -69,6 +97,7 @@ export function KeywordTrendModal({
         },
       }),
   });
+  const history = historyQuery.data;
 
   const points = useMemo(() => history ?? [], [history]);
   const devices = useMemo(() => deriveDevices(points), [points]);
@@ -99,7 +128,7 @@ export function KeywordTrendModal({
   );
 
   // Keys ("<ts>:<device>") whose plotted point sits in the bottom band because
-  // the real position was null — so the tooltip can say "Not in top N"
+  // the real position was null — so the tooltip can say "Not found"
   // unambiguously even when a genuine position equals serpDepth.
   const bottomBandKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -113,219 +142,204 @@ export function KeywordTrendModal({
 
   const historyRows = useMemo(() => buildHistoryRows(points), [points]);
 
-  const exportRows = () =>
-    historyRows.map((r) => [
-      new Date(r.checkedAt).toISOString(),
-      DEVICE_STYLE[r.device].label,
-      r.position ?? "",
-      csvChange(r.position, r.previousPosition),
-    ]);
-
   const handleCopy = () => {
-    const headers = ["日期", "设备", "排名", "较上次变化"];
-    void navigator.clipboard.writeText(buildCsv(headers, exportRows()));
+    void navigator.clipboard.writeText(
+      buildCsv(HISTORY_HEADERS, historyRows.map(historyExportRow)),
+    );
     toast.success("已复制到剪贴板");
     captureClientEvent("rank_tracking:keyword_trend_copy");
   };
 
   const handleExport = () => {
-    const headers = ["日期", "设备", "排名", "较上次变化"];
-    downloadCsv(
-      `rank-history-${slugify(target.keyword)}.csv`,
-      buildCsv(headers, exportRows()),
-    );
+    void exportRows({
+      format: "csv",
+      feature: "rank_tracking_keyword_trend",
+      headers: HISTORY_HEADERS,
+      rows: historyRows.map(historyExportRow),
+      filename: `rank-history-${slugify(target.keyword)}`,
+    });
     captureClientEvent("rank_tracking:keyword_trend_export");
   };
 
   return (
-    <Modal
-      onClose={onClose}
-      labelledBy="keyword-trend-title"
-      maxWidth="max-w-3xl"
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 id="keyword-trend-title" className="text-lg font-semibold">
-            {target.keyword}
-          </h3>
-          <p className="text-xs text-base-content/60">
-            {domain} &middot;{" "}
-            {locationName
-              ? formatLocationLabel(locationName, 2)
-              : (LOCATIONS[locationCode] ?? "US")}{" "}
-            · 排名趋势
-          </p>
-        </div>
-        <TrendRangeToggle value={sinceDays} onChange={setSinceDays} />
-      </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="size-5 animate-spin text-base-content/50" />
-        </div>
-      ) : maxPerDevice <= 1 ? (
-        <EmptyState count={maxPerDevice} />
-      ) : (
-        <>
-          <RankTrendChart
-            data={chartData}
-            series={series}
-            serpDepth={serpDepth}
-            showBottomBand
-            renderTooltip={(label, entries) => (
-              <ChartTooltip
-                label={label}
-                entries={entries}
-                serpDepth={serpDepth}
-                bottomBandKeys={bottomBandKeys}
-              />
-            )}
-          />
-
-          <div className="flex items-center justify-end gap-2">
-            <button className="btn btn-ghost btn-xs gap-1" onClick={handleCopy}>
-              <Copy className="size-3.5" />
-              复制
-            </button>
-            <button
-              className="btn btn-ghost btn-xs gap-1"
-              onClick={handleExport}
+      <DialogContent showCloseButton={false} className="sm:max-w-3xl">
+        <DialogHeader className="flex-row items-start justify-between gap-3">
+          <div className="space-y-1">
+            <DialogTitle>{target.keyword}</DialogTitle>
+            <DialogDescription className="text-xs">
+              {domain} &middot;{" "}
+              {locationName
+                ? formatLocationLabel(locationName, 2)
+                : (LOCATIONS[locationCode] ?? "US")}{" "}
+              &middot; 排名变化
+            </DialogDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              nativeButton={false}
+              title="使用已追踪的语言、国家和城市在 Google 搜索此关键词"
+              render={
+                <a
+                  href={googleSerpUrl(target.keyword, {
+                    locationCode,
+                    languageCode,
+                    locationName,
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                />
+              }
             >
-              <Download className="size-3.5" />
-              导出 CSV
-            </button>
+              <ExternalLink data-icon="inline-start" />
+              在 Google 打开
+            </Button>
+            <TrendRangeToggle value={sinceDays} onChange={setSinceDays} />
           </div>
+        </DialogHeader>
 
-          <div className="max-h-64 overflow-auto rounded-lg border border-base-300">
-            <table className="table table-sm">
-              <thead className="sticky top-0 bg-base-100">
-                <tr>
-                  <th>日期</th>
-                  {devices.length > 1 && <th>设备</th>}
-                  <th>排名</th>
-                  <th>较上次检查的变化</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historyRows.map((r, idx) => {
-                  // No prior ranking to compare against (first check, or the
-                  // previous check was unranked): show the lone position as a
-                  // centered neutral pill so it doesn't look like a stray number
-                  // next to the "before → after" rows.
-                  const noPrevious =
-                    r.position !== null && r.previousPosition === null;
-                  return (
-                    <tr key={`${r.device}-${r.checkedAt}-${idx}`}>
-                      <td className="whitespace-nowrap text-xs">
-                        {new Date(r.checkedAt).toLocaleDateString()}
-                      </td>
-                      {devices.length > 1 && (
-                        <td className="text-xs">
-                          {DEVICE_STYLE[r.device].label}
-                        </td>
-                      )}
-                      <td>
-                        {r.position === null ? (
-                          <span className="text-base-content/40 text-xs">
-                            未进入前 {serpDepth}
-                          </span>
-                        ) : (
-                          <span className="font-mono text-sm">
-                            {r.position}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {noPrevious ? (
-                          // Invisible placeholders matching the "before → after"
-                          // layout so the lone pill lines up under the position
-                          // badge column instead of floating.
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="w-6" aria-hidden />
-                            <span aria-hidden className="opacity-0">
-                              →
-                            </span>
-                            <span className="font-mono rounded bg-base-200 px-1.5 py-0.5 text-xs font-semibold text-base-content/70">
-                              {r.position}
-                            </span>
-                          </span>
-                        ) : (
-                          <DeviceRankCell
-                            result={{
-                              position: r.position,
-                              previousPosition: r.previousPosition,
-                              rankingUrl: null,
-                              serpFeatures: [],
-                            }}
-                          />
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-
-      <div className="flex justify-end">
-        <button className="btn btn-ghost btn-sm" onClick={onClose}>
-          关闭
-        </button>
-      </div>
-    </Modal>
-  );
-}
-
-function EmptyState({ count }: { count: number }) {
-  return (
-    <div className="rounded-lg border border-dashed border-base-300 p-10 text-center text-sm text-base-content/60">
-      {count === 0
-        ? "暂无历史记录。运行检查后即可持续追踪排名变化。"
-        : "目前只有 1 次检查，下次检查后将显示趋势图。"}
-    </div>
-  );
-}
-
-function ChartTooltip({
-  label,
-  entries,
-  serpDepth,
-  bottomBandKeys,
-}: {
-  label: number;
-  entries: Array<{ dataKey?: string | number; value: number | null }>;
-  serpDepth: number;
-  bottomBandKeys: Set<string>;
-}) {
-  return (
-    <div className="rounded-md border border-base-300 bg-base-100 px-3 py-2 shadow-sm space-y-0.5">
-      <p className="text-xs text-base-content/60">
-        {new Date(label).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}
-      </p>
-      {entries.map((e) => {
-        const device =
-          e.dataKey === "desktop" || e.dataKey === "mobile"
-            ? DEVICE_STYLE[e.dataKey].label
-            : String(e.dataKey ?? "");
-        const inBottomBand = bottomBandKeys.has(`${label}:${e.dataKey}`);
-        return (
-          <p key={String(e.dataKey)} className="text-sm font-medium">
-            {device}:{" "}
-            {inBottomBand ? (
-              <span className="text-base-content/60">未进入前 {serpDepth}</span>
+        <QueryState
+          query={historyQuery}
+          errorFallback="无法加载关键词历史"
+          loading={<Skeleton className="h-56 w-full" />}
+        >
+          {() =>
+            maxPerDevice <= 1 ? (
+              <TrendEmptyState checks={maxPerDevice} />
             ) : (
-              e.value
-            )}
-          </p>
-        );
-      })}
-    </div>
+              <>
+                <RankTrendChart
+                  data={chartData}
+                  series={series}
+                  serpDepth={serpDepth}
+                  showBottomBand
+                  valueFormatter={(value, item) => {
+                    // The payload is the chart row, typed `any` upstream.
+                    const row: unknown = item.payload;
+                    const checkedAt =
+                      typeof row === "object" &&
+                      row !== null &&
+                      "checkedAt" in row
+                        ? row.checkedAt
+                        : undefined;
+                    return typeof checkedAt === "number" &&
+                      typeof item.dataKey === "string" &&
+                      bottomBandKeys.has(`${checkedAt}:${item.dataKey}`) ? (
+                      <span className="font-normal text-muted-foreground">
+                        未找到
+                      </span>
+                    ) : (
+                      String(value)
+                    );
+                  }}
+                />
+
+                <div className="flex items-center justify-end gap-2">
+                  <Button variant="ghost" size="xs" onClick={handleCopy}>
+                    <Copy data-icon="inline-start" />
+                    复制
+                  </Button>
+                  <Button variant="ghost" size="xs" onClick={handleExport}>
+                    <Download data-icon="inline-start" />
+                    导出 CSV
+                  </Button>
+                </div>
+
+                <div className="overflow-hidden rounded-lg border border-border">
+                  <Table containerClassName="max-h-64">
+                    <TableHeader className="sticky top-0 z-10 bg-popover">
+                      <TableRow>
+                        <TableHead>日期</TableHead>
+                        {devices.length > 1 && <TableHead>设备</TableHead>}
+                        <TableHead>排名</TableHead>
+                        <TableHead>较上次变化</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {historyRows.map((r, idx) => {
+                        // No prior ranking to compare against (first check, or the
+                        // previous check was unranked): show the lone position as a
+                        // centered neutral pill so it doesn't look like a stray number
+                        // next to the "before → after" rows.
+                        const noPrevious =
+                          r.position !== null && r.previousPosition === null;
+                        return (
+                          <TableRow key={`${r.device}-${r.checkedAt}-${idx}`}>
+                            <TableCell className="text-xs whitespace-nowrap">
+                              {new Date(r.checkedAt).toLocaleDateString()}
+                            </TableCell>
+                            {devices.length > 1 && (
+                              <TableCell className="text-xs">
+                                {DEVICE_STYLE[r.device].label}
+                              </TableCell>
+                            )}
+                            <TableCell>
+                              {r.position === null ? (
+                                <Tooltip>
+                                  <TooltipTrigger
+                                    delay={150}
+                                    render={
+                                      <span className="cursor-help text-xs text-muted-foreground underline decoration-dotted underline-offset-2" />
+                                    }
+                                  >
+                                    未找到
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    未获得排名，或结果不完整
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <span className="font-mono text-sm">
+                                  {r.position}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {noPrevious ? (
+                                // Invisible placeholders matching the "before → after"
+                                // layout so the lone pill lines up under the position
+                                // badge column instead of floating.
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="w-6" aria-hidden />
+                                  <span aria-hidden className="opacity-0">
+                                    →
+                                  </span>
+                                  <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs font-semibold text-muted-foreground">
+                                    {r.position}
+                                  </span>
+                                </span>
+                              ) : (
+                                <DeviceRankCell
+                                  result={{
+                                    position: r.position,
+                                    previousPosition: r.previousPosition,
+                                    rankingUrl: null,
+                                    serpFeatures: [],
+                                  }}
+                                />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )
+          }
+        </QueryState>
+
+        <DialogFooter showCloseButton />
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -400,4 +414,15 @@ function slugify(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+const HISTORY_HEADERS = ["日期", "设备", "排名", "较上次变化"];
+
+function historyExportRow(row: HistoryRow): CsvValue[] {
+  return [
+    new Date(row.checkedAt).toISOString(),
+    DEVICE_STYLE[row.device].label,
+    row.position ?? "",
+    csvChange(row.position, row.previousPosition),
+  ];
 }

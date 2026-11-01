@@ -12,9 +12,8 @@ import type {
   TurnContext,
 } from "@cloudflare/think";
 import { clearChatTerminal } from "agents/chat";
-import { createCompactFunction } from "agents/experimental/memory/utils";
-import { generateText } from "ai";
-import type { UIMessage } from "ai";
+import { createCompactFunction } from "agents/sessions";
+import { generateText, type UIMessage } from "ai";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db, withPgClient } from "@/db";
@@ -26,7 +25,6 @@ import {
 import { SamSessionRepository } from "@/server/features/sam/SamSessionRepository";
 import { ProjectContextService } from "@/server/features/project-context/services/ProjectContextService";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
-import { buildSamMcpTools } from "@/server/features/sam/samChatTools";
 import { buildSamSkillSource } from "@/server/features/sam/samSkills";
 import { buildSamSystemPrompt } from "@/server/features/sam/samSystemPrompt";
 import {
@@ -34,8 +32,15 @@ import {
   type SamTurnStats,
 } from "@/server/features/sam/samTurnTelemetry";
 import { resolveRuntimeChatProvider } from "@/server/features/chat-provider/services/ChatProviderService";
-import { buildChatAgentModelFromResolved } from "@/server/lib/openrouter";
-import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
+import {
+  buildChatAgentModelFromResolved,
+  buildSamChatModel,
+  getOpenRouterAccess,
+} from "@/server/lib/openrouter";
+import {
+  isHostedServerAuthMode,
+  usesBetterAuthServer,
+} from "@/server/lib/runtime-env";
 import {
   checkUsageCreditsDepleted,
   trackUsageCreditSpend,
@@ -189,9 +194,19 @@ export class SamChatAgent extends Think {
   }
 
   // Think calls this before beforeTurn. The turn uses the model beforeTurn
-  // returns, after saved chat settings (or the env fallback) are loaded.
+  // returns, after saved chat settings (or the env / gateway fallback) load.
   getModel() {
     return staticAssistantModel("SAM is loading its chat settings.");
+  }
+
+  private async chatModel(reasoningEffort: "max" | "low") {
+    return withPgClient(async () => {
+      const resolved = await resolveRuntimeChatProvider(this.env);
+      if (resolved.baseUrl || resolved.apiKey) {
+        return buildChatAgentModelFromResolved(resolved, reasoningEffort);
+      }
+      return buildSamChatModel(this.env, reasoningEffort);
+    });
   }
 
   override getSkills() {
@@ -223,11 +238,8 @@ export class SamChatAgent extends Think {
   // Compaction summaries run outside the step loop (so outside onStepFinish),
   // on the same model at low reasoning; their cost joins the turn's total.
   private async summarizeForCompaction(prompt: string): Promise<string> {
-    const resolved = await withPgClient(() =>
-      resolveRuntimeChatProvider(this.env),
-    );
     const result = await generateText({
-      model: buildChatAgentModelFromResolved(resolved, "low"),
+      model: await this.chatModel("low"),
       prompt,
     });
     this.recordSpend(openRouterCostUsd(result.providerMetadata));
@@ -308,10 +320,14 @@ export class SamChatAgent extends Think {
     const turn = this.telemetry.beginTurn(turnCtx.continuation);
     return withPgClient(async (): Promise<TurnConfig> => {
       const resolved = await resolveRuntimeChatProvider(this.env);
-      if (!resolved.apiKey && !resolved.baseUrl) {
+      if (
+        !resolved.apiKey &&
+        !resolved.baseUrl &&
+        !getOpenRouterAccess(this.env)
+      ) {
         turn.refusal = "no_model";
         return this.refusalTurn(
-          "Add a chat API key in Settings before using SAM.",
+          "请先在设置里填写聊天 API Key。使用 OpenAI 兼容接口时，再填写 Chat Base URL 和模型 id。",
         );
       }
 
@@ -332,34 +348,36 @@ export class SamChatAgent extends Think {
       const { organizationId } = ctx.project;
       const hosted = await isHostedServerAuthMode();
       if (hosted) {
-        const { depleted, monthlyRemaining } = await checkUsageCreditsDepleted({
+        const gate = await checkUsageCreditsDepleted({
           userId: ctx.row.userId,
           userEmail: ctx.userEmail,
           organizationId,
           projectId: ctx.project.id,
         });
-        if (depleted) {
+        if (gate.depleted) {
           turn.refusal = "credits";
+          // A spent budget holds credits back; buying more would not help.
           return this.refusalTurn(
-            "You're out of credits. Top up to keep using SAM.",
+            `${gate.budgetReached ? "You've hit your monthly auto-reload budget. Raise it" : "You're out of credits. Upgrade your plan or buy more credits"} on the Billing page to keep using SAM.`,
           );
         }
-        this.turnMonthlyRemaining = monthlyRemaining;
+        this.turnMonthlyRemaining = gate.monthlyRemaining;
       }
 
       const baseUrl =
         (await this.ctx.storage.get<string>(PUBLIC_ORIGIN_KEY)) ??
         "https://app.openseo.so";
-      // Delegated/self-host orgs have no member rows — implicit owner. In
-      // hosted mode a missing member row means the user was removed from the
-      // workspace; fail closed instead of letting the open socket keep
-      // owner-level tools (WebSockets authorize at connect time only, so this
-      // per-turn check is what actually revokes a removed member's chat).
+      // Delegated/self-host orgs have no member rows — implicit owner. With
+      // real accounts (hosted and password modes) a missing member row means the
+      // user was removed from the workspace; fail closed instead of letting
+      // the open socket keep owner-level tools (WebSockets authorize at
+      // connect time only, so this per-turn check is what actually revokes a
+      // removed member's chat).
       const membership = await AuthRepository.getMembership(
         ctx.row.userId,
         organizationId,
       );
-      if (hosted && !membership) {
+      if ((await usesBetterAuthServer()) && !membership) {
         turn.refusal = "no_access";
         return this.refusalTurn(
           "You no longer have access to this organization, so I can't continue this chat.",
@@ -370,17 +388,16 @@ export class SamChatAgent extends Think {
         userEmail: ctx.userEmail,
         organizationId,
         role: membership?.role ?? "owner",
-        // SAM sessions belong to one project's workspace; org context is
-        // fixed for the session, like an OAuth token's.
-        orgScope: "pinned",
         baseUrl,
         clientId: null,
         scopes: [MCP_SCOPE],
       };
 
+      // Loaded per turn, not at startup: the tool schemas are costly to build.
+      const samTools = await import("@/server/features/sam/samChatTools");
       return {
-        model: buildChatAgentModelFromResolved(resolved, "max"),
-        tools: buildSamMcpTools(authContext, ctx.project, turn.turnId),
+        model: await this.chatModel("max"),
+        tools: samTools.buildSamMcpTools(authContext, ctx.project, turn.turnId),
         // SAM runs complex multi-step work in one turn (site-read intake plus
         // a full research chain, multi-competitor sweeps), so the step budget
         // is generous; cost is bounded by per-step metering and the model
@@ -454,7 +471,7 @@ export class SamChatAgent extends Think {
     this.ctx.waitUntil(
       this.telemetry.report(
         result.status,
-        { request_id: result.requestId, error_message: result.error },
+        { request_id: result.requestId },
         this.messages,
         { billing: this.billing },
       ),

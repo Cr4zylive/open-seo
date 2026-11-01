@@ -36,12 +36,12 @@ export const RESEARCH_SCOPE_LABELS: Record<ResearchScope, string> = {
   exact_url: "精确 URL",
   subfolder: "目录",
   domain: "域名",
-  subdomains: "含子域名",
+  subdomains: "子域名",
 };
 
 /** Base wording for MCP `scope` params; tools append their own caveats. */
 export const RESEARCH_SCOPE_PARAM_DESCRIPTION =
-  "Research scope: 'domain' (hostname without subdomains), 'subdomains' (hostname plus all subdomains), 'subfolder' (path and its children), or 'exact_url' (one page). Defaults to 'subdomains' for root inputs and 'subfolder' when the input has a path.";
+  "研究范围：'domain'（主机名，不含子域名）、'subdomains'（主机名及其所有子域名）、'subfolder'（路径及其子页面）或 'exact_url'（单个页面）。根路径默认 'subdomains'，带路径时默认 'subfolder'。";
 
 /** One-line explanations shown in the scope dropdown. */
 export const RESEARCH_SCOPE_DESCRIPTIONS: Record<ResearchScope, string> = {

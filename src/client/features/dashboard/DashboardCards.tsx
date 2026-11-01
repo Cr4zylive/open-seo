@@ -1,7 +1,15 @@
+import { GoogleSearchConsoleLogo } from "@/client/features/integrations/GoogleProductLogos";
+import { startAudit } from "@/serverFunctions/audit";
+import { QueryError } from "@/client/components/QueryState";
+import { LoaderCircle, ScanSearch } from "lucide-react";
+import { CardShell } from "@/client/components/CardShell";
+import { Progress } from "@/client/components/ui/progress";
+import { Button } from "@/client/components/ui/button";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { SearchConsoleConnectionCard } from "@/client/features/gsc/SearchConsoleConnectionCard";
+import { GoogleConnectionCard } from "@/client/features/integrations/GoogleConnectionCard";
+import { SeverityBadge } from "@/client/features/audit/shared";
 import { AUDIT_ISSUE_TYPES } from "@/shared/audit-issues";
 
 import {
@@ -11,18 +19,20 @@ import {
 } from "@/client/features/search-performance/SearchPerformanceColumns";
 import { getSearchPerformanceReport } from "@/serverFunctions/searchPerformance";
 import {
-  CardShell,
-  EmptyCardBody,
   formatDay,
   moreDetailsClass,
-  newLost,
-  PercentDelta,
-  Stat,
+  MetricsTableSkeleton,
 } from "@/client/features/dashboard/cardParts";
-import type {
-  DashboardAuditSummary,
-  DashboardBacklinkSummary,
-} from "@/server/features/dashboard/services/DashboardService";
+import { percentChange } from "@/client/components/MetricsTable";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
+import type { DashboardAuditSummary } from "@/server/features/dashboard/services/DashboardService";
 
 // Plain string-keyed view of the registry: issue types from the DB are not
 // statically guaranteed to be registry keys.
@@ -33,84 +43,111 @@ const issueTitles: Record<string, string | undefined> = Object.fromEntries(
 export function GscCard({
   projectId,
   connected,
+  siteUrl,
 }: {
   projectId: string;
   connected: boolean;
+  siteUrl: string | null;
 }) {
   const reportQuery = useQuery({
-    queryKey: ["dashboardGscReport", projectId],
+    queryKey: ["dashboardGscReport", projectId, siteUrl],
     queryFn: () =>
       getSearchPerformanceReport({
         data: { projectId, dateRange: "last_28_days" },
       }),
     enabled: connected,
+    staleTime: 10 * 60_000,
   });
+  const report = reportQuery.data;
 
   // Not connected (or a dead grant discovered by the report call): the
   // connection card sells and runs the whole flow itself.
-  if (!connected || (reportQuery.data && !reportQuery.data.connected)) {
+  if (!connected || (report && !report.connected)) {
     return (
       <div id="connect-gsc">
-        <SearchConsoleConnectionCard projectId={projectId} />
+        <GoogleConnectionCard provider="gsc" projectId={projectId} prominent />
       </div>
     );
   }
 
-  const report = reportQuery.data;
-
   return (
     <CardShell
-      title="搜索表现"
-      stamp="Google Search Console · 最近 28 天"
+      title="Google Search Console 表现"
+      icon={<GoogleSearchConsoleLogo className="size-5" />}
       action={
         <Link
           to="/p/$projectId/search-performance"
           params={{ projectId }}
           className={moreDetailsClass}
         >
-          查看更多
+          查看 GSC 洞察 →
         </Link>
       }
     >
-      {reportQuery.isPending ? (
-        <div className="grid grid-cols-2 gap-3" aria-busy>
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="skeleton h-20" />
-          ))}
-        </div>
-      ) : reportQuery.isError ? (
-        <p className="text-sm text-base-content/60">
-          无法加载 Search Console 数据，请稍后重试。
+      <p className="mb-4 text-sm font-medium text-muted-foreground">
+        最近 28 天
+      </p>
+      {reportQuery.isError ? (
+        <p className="text-sm text-muted-foreground">
+          无法加载 Search Console 数据，请稍后再试。
         </p>
-      ) : report?.connected ? (
-        <div className="grid grid-cols-2 gap-3">
-          <Stat
-            label="点击次数"
-            value={formatCount(report.totals.clicks)}
-            sub={
-              <PercentDelta
-                current={report.totals.clicks}
-                previous={report.prevTotals.clicks}
-              />
-            }
-          />
-          <Stat
-            label="展示次数"
-            value={formatCount(report.totals.impressions)}
-            sub={
-              <PercentDelta
-                current={report.totals.impressions}
-                previous={report.prevTotals.impressions}
-              />
-            }
-          />
-          <Stat label="CTR" value={formatCtr(report.totals.ctr)} />
-          <Stat
-            label="平均排名"
-            value={formatPosition(report.totals.position)}
-          />
-        </div>
-      ) : null}
+      ) : !report ? (
+        <MetricsTableSkeleton />
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>指标</TableHead>
+              <TableHead className="text-right">数值</TableHead>
+              <TableHead className="text-right">变化</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {[
+              {
+                label: "点击次数",
+                value: formatCount(report.totals.clicks),
+                change: percentChange(
+                  report.totals.clicks,
+                  report.prevTotals.clicks,
+                ),
+              },
+              {
+                label: "展示次数",
+                value: formatCount(report.totals.impressions),
+                change: percentChange(
+                  report.totals.impressions,
+                  report.prevTotals.impressions,
+                ),
+              },
+              {
+                label: "点击率",
+                value: formatCtr(report.totals.ctr),
+                change: null,
+              },
+              {
+                label: "平均排名",
+                value: formatPosition(report.totals.position),
+                change: null,
+              },
+            ].map((metric) => (
+              <TableRow key={metric.label}>
+                <TableCell>{metric.label}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {metric.value}
+                </TableCell>
+                <TableCell
+                  className={`text-right tabular-nums ${metric.change === null || metric.change === 0 ? "text-muted-foreground" : metric.change > 0 ? "text-success" : "text-destructive"}`}
+                >
+                  {metric.change === null
+                    ? "—"
+                    : `${metric.change > 0 ? "+" : ""}${metric.change}%`}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </CardShell>
   );
 }
@@ -118,175 +155,184 @@ export function GscCard({
 export function AuditHealthCard({
   projectId,
   audit,
+  domain,
 }: {
   projectId: string;
   audit: DashboardAuditSummary | null;
+  domain: string | null;
 }) {
-  if (!audit) {
+  const queryClient = useQueryClient();
+  const scan = useMutation({
+    mutationFn: () =>
+      startAudit({
+        data: {
+          projectId,
+          startUrl: `https://${domain}`,
+          maxPages: 50,
+          renderJavaScript: true,
+        },
+      }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({
+        queryKey: ["dashboardOverview", projectId],
+      }),
+    meta: { errorToast: false },
+  });
+  if (!audit)
     return (
-      <CardShell title="站点审计">
-        <EmptyCardBody
-          message="抓取网站，检查失效链接、缺失标签和索引问题。"
-          cta={
-            <Link
-              to="/p/$projectId/audit"
-              params={{ projectId }}
-              className="btn btn-primary btn-sm"
+      <CardShell title="网站健康">
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center">
+          <ScanSearch className="size-7 text-muted-foreground" />
+          <h3 className="font-medium">找出拖累网站的问题</h3>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            扫描最多 50 个页面，查找失效链接、缺失标题以及 Google
+            无法收录的页面。
+          </p>
+          {domain ? (
+            <Button disabled={scan.isPending} onClick={() => scan.mutate()}>
+              {scan.isPending ? "正在开始扫描…" : "扫描我的网站"}
+            </Button>
+          ) : (
+            <Button
+              nativeButton={false}
+              render={
+                <Link to="/p/$projectId/settings" params={{ projectId }} />
+              }
             >
-              运行审计
-            </Link>
-          }
-        />
+              添加你的网站
+            </Button>
+          )}
+          {scan.isError && (
+            <QueryError
+              error={scan.error}
+              fallback="无法开始扫描"
+            />
+          )}
+        </div>
+      </CardShell>
+    );
+
+  if (audit.status === "running") {
+    const isLighthouse = audit.currentPhase === "lighthouse";
+    const isFinalizing = audit.currentPhase === "finalizing";
+    const checked = isLighthouse
+      ? audit.lighthouseCompleted + audit.lighthouseFailed
+      : audit.pagesCrawled;
+    const total = isLighthouse ? audit.lighthouseTotal : audit.pagesTotal;
+    // A running crawl has at most a partial issue list, and an empty one is
+    // not the same as a healthy site, so show progress instead.
+    return (
+      <CardShell
+        title="网站健康"
+        action={
+          <Link
+            to="/p/$projectId/audit"
+            params={{ projectId }}
+            search={{ auditId: audit.id }}
+            className={moreDetailsClass}
+          >
+            查看进度
+          </Link>
+        }
+      >
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6 text-center">
+          <LoaderCircle className="size-7 animate-spin text-muted-foreground" />
+          <h3 className="font-medium">
+            {isLighthouse
+              ? "正在运行 Lighthouse 检查"
+              : isFinalizing
+                ? "正在整理结果"
+                : audit.currentPhase === "discovery"
+                  ? "正在查找要扫描的页面"
+                  : "正在扫描你的网站"}
+          </h3>
+          {!isFinalizing && (
+            <Progress
+              className="w-full max-w-xs"
+              value={checked}
+              max={total || 1}
+              aria-label={isLighthouse ? "Lighthouse 检查" : "已抓取页面"}
+            />
+          )}
+          <p className="text-sm text-muted-foreground tabular-nums">
+            {isLighthouse
+              ? `${checked} / ${total} 项检查${audit.lighthouseFailed > 0 ? `（${audit.lighthouseFailed} 项失败）` : ""}`
+              : isFinalizing
+                ? `已抓取 ${audit.pagesCrawled} 个页面，正在完成报告。`
+                : `已抓取 ${checked} / 最多 ${total} 个页面`}
+          </p>
+        </div>
       </CardShell>
     );
   }
 
   return (
     <CardShell
-      title="站点审计"
-      stamp={`站点审计 · ${
-        audit.status === "completed"
-          ? `已抓取 ${audit.pagesCrawled} 个页面 · ${formatDay(audit.startedAt)}`
-          : audit.status === "running"
-            ? "正在抓取"
-            : "上次抓取失败"
-      }`}
+      title="网站健康"
       action={
         <Link
           to="/p/$projectId/audit"
           params={{ projectId }}
+          search={{ auditId: audit.id, tab: "issues" }}
           className={moreDetailsClass}
         >
-          查看更多
+          查看问题
         </Link>
       }
     >
-      {audit.topIssues.length === 0 ? (
-        <div className="flex items-center gap-2 text-sm text-base-content/70">
-          <Check className="size-4 text-success" />
-          未发现问题，网站状态良好。
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {audit.topIssues.map((issue) => (
-            <li
-              key={issue.issueType}
-              className="flex items-center justify-between gap-2 text-sm"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <span
-                  className={`size-2 shrink-0 rounded-full ${
-                    issue.severity === "critical"
-                      ? "bg-error"
-                      : issue.severity === "warning"
-                        ? "bg-warning"
-                        : "bg-base-content/30"
-                  }`}
-                />
-                <span className="truncate">
-                  {issueTitles[issue.issueType] ?? issue.issueType}
-                </span>
-              </span>
-              <span className="shrink-0 tabular-nums text-base-content/60">
-                {issue.count} 个页面
-              </span>
-            </li>
-          ))}
-          {audit.totalIssueTypes > audit.topIssues.length ? (
-            <li className="text-xs text-base-content/50">
-              + {audit.totalIssueTypes - audit.topIssues.length} 个其他问题
-            </li>
-          ) : null}
-        </ul>
-      )}
-    </CardShell>
-  );
-}
-
-export function BacklinkPulseCard({
-  projectId,
-  backlinks,
-  refreshing,
-}: {
-  projectId: string;
-  backlinks: DashboardBacklinkSummary | null;
-  refreshing: boolean;
-}) {
-  if (!backlinks && refreshing) {
-    return (
-      <CardShell title="反向链接动态" stamp="正在生成首次快照…">
-        <div className="grid grid-cols-2 gap-3" aria-busy>
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="skeleton h-20" />
-          ))}
-        </div>
-      </CardShell>
-    );
-  }
-
-  if (!backlinks) {
-    return (
-      <CardShell title="反向链接动态">
-        <p className="text-sm text-base-content/60">
-          我们会记录链接到您域名的网站，无需额外设置。
+      {audit.status === "failed" && (
+        <p className="mb-4 text-sm text-destructive">
+          最近一次扫描未完成。可以查看已有结果，或重试。
         </p>
-      </CardShell>
-    );
-  }
-
-  return (
-    <CardShell
-      title="反向链接动态"
-      stamp={`反向链接 · 快照 ${formatDay(backlinks.capturedAt)}${
-        refreshing ? "· 刷新中…" : ""
-      }`}
-      action={
-        <Link
-          to="/p/$projectId/backlinks"
-          params={{ projectId }}
-          search={{ target: backlinks.domain, scope: "domain" }}
-          className={moreDetailsClass}
-        >
-          查看更多
-        </Link>
-      }
-    >
-      <div className="grid grid-cols-2 gap-3">
-        <Stat
-          label="引用域名"
-          value={
-            backlinks.referringDomains === null
-              ? "—"
-              : backlinks.referringDomains.toLocaleString()
-          }
-        />
-        <Stat
-          label="反向链接"
-          value={
-            backlinks.backlinks === null
-              ? "—"
-              : backlinks.backlinks.toLocaleString()
-          }
-        />
-        <Stat
-          label="新增链接"
-          value={`▲ ${newLost(backlinks.newBacklinks)}`}
-          tone={
-            backlinks.newBacklinks && backlinks.newBacklinks > 0
-              ? "success"
-              : undefined
-          }
-        />
-        <Stat
-          label="丢失链接"
-          value={`▼ ${newLost(backlinks.lostBacklinks)}`}
-          tone={
-            backlinks.lostBacklinks && backlinks.lostBacklinks > 0
-              ? "error"
-              : undefined
-          }
-        />
-      </div>
+      )}
+      {audit.status === "completed" && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          已检查 {audit.pagesCrawled} 个页面 · {formatDay(audit.startedAt)}
+        </p>
+      )}
+      {audit.topIssues.length === 0 ? (
+        audit.status === "completed" ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Check className="size-4 text-success" />
+            未发现问题，网站状态良好。
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            再次运行审计以查看问题。
+          </p>
+        )
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>问题</TableHead>
+              <TableHead>严重程度</TableHead>
+              <TableHead className="text-right">受影响页面</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {audit.topIssues.map((issue) => (
+              <TableRow key={issue.issueType}>
+                <TableCell>
+                  {issueTitles[issue.issueType] ?? issue.issueType}
+                </TableCell>
+                <TableCell>
+                  <SeverityBadge severity={issue.severity}>
+                    {issue.severity === "critical"
+                      ? "严重"
+                      : issue.severity === "warning"
+                        ? "警告"
+                        : "提示"}
+                  </SeverityBadge>
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {issue.count}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </CardShell>
   );
 }

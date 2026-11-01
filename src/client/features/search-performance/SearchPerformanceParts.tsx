@@ -3,15 +3,24 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Copy, Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 import {
-  AppDataTable,
-  useAppTable,
+  DataTable,
+  useDataTable,
   useSelectionAnchor,
-} from "@/client/components/table/AppDataTable";
+} from "@/client/components/table/DataTable";
 import {
   TableBulkActionBar,
   TableBulkActionButton,
 } from "@/client/components/table/TableBulkActionBar";
 import { TablePagination } from "@/client/components/table/TablePagination";
+import { Button } from "@/client/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/client/components/ui/table";
 import {
   buildDimensionColumns,
   buildStrikingColumns,
@@ -21,14 +30,8 @@ import {
   type Report,
   type SearchPerformanceTableRow,
 } from "@/client/features/search-performance/SearchPerformanceColumns";
-import {
-  buildCsv,
-  downloadCsv,
-  normalizeExportValue,
-  type CsvValue,
-} from "@/client/lib/csv";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
-import { exportTableToSheets } from "@/client/lib/exportToSheets";
+import { normalizeExportValue, type CsvValue } from "@/client/lib/csv";
+import { exportRows } from "@/client/lib/exportRows";
 import { captureClientEvent } from "@/client/lib/posthog";
 import {
   SEARCH_PERFORMANCE_PAGE_SIZES,
@@ -36,7 +39,6 @@ import {
 } from "@/types/schemas/search-performance";
 import { saveKeywords } from "@/serverFunctions/keywords";
 
-export type Tab = "striking" | "queries" | "pages";
 export type ExportTarget = "csv" | "sheets";
 
 type ExportTable = { filename: string; headers: string[]; rows: CsvValue[][] };
@@ -44,8 +46,8 @@ type ExportTable = { filename: string; headers: string[]; rows: CsvValue[][] };
 function strikingExportTable(report: Report): ExportTable {
   const stamp = `${report.range.startDate}-to-${report.range.endDate}`;
   return {
-    filename: `search-performance-striking-distance-${stamp}.csv`,
-    headers: ["查询词", "页面", "展示次数", "点击次数", "排名"],
+    filename: `search-performance-striking-distance-${stamp}`,
+    headers: ["查询", "页面", "展示次数", "点击次数", "排名"],
     rows: report.strikingDistance.map((row) => [
       row.query,
       row.page,
@@ -63,9 +65,9 @@ function dimensionExportTable(
 ): ExportTable {
   const isPage = dimension === "page";
   return {
-    filename: `search-performance-${isPage ? "pages" : "queries"}-${stamp}.csv`,
+    filename: `search-performance-${isPage ? "pages" : "queries"}-${stamp}`,
     headers: [
-      isPage ? "页面" : "查询词",
+      isPage ? "页面" : "查询",
       "点击次数",
       "展示次数",
       "CTR",
@@ -81,24 +83,19 @@ function dimensionExportTable(
   };
 }
 
-function runExport(table: ExportTable, target: ExportTarget): void {
-  if (target === "csv") {
-    downloadCsv(table.filename, buildCsv(table.headers, table.rows));
-    captureClientEvent("data:export", {
-      source_feature: "search_performance",
-      result_count: table.rows.length,
-    });
-    return;
-  }
-  void exportTableToSheets({
-    headers: table.headers,
-    rows: table.rows,
+function runExport(table: ExportTable, target: ExportTarget): Promise<void> {
+  return exportRows({
+    format: target,
     feature: "search_performance",
+    ...table,
   });
 }
 
-export function exportStriking(report: Report, target: ExportTarget): void {
-  runExport(strikingExportTable(report), target);
+export function exportStriking(
+  report: Report,
+  target: ExportTarget,
+): Promise<void> {
+  return runExport(strikingExportTable(report), target);
 }
 
 /** Export the full queries/pages dataset (fetched separately, not the visible
@@ -108,31 +105,9 @@ export function exportDimensionRows(
   rows: SearchPerformanceTableRow[],
   range: Report["range"],
   target: ExportTarget,
-): void {
+): Promise<void> {
   const stamp = `${range.startDate}-to-${range.endDate}`;
-  runExport(dimensionExportTable(dimension, rows, stamp), target);
-}
-
-export function TabButton({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      className={`tab ${active ? "tab-active" : ""}`}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
+  return runExport(dimensionExportTable(dimension, rows, stamp), target);
 }
 
 type Delta = { text: string; improved: boolean } | null;
@@ -154,66 +129,58 @@ function positionDelta(current: number, previous: number): Delta {
   };
 }
 
-export function TotalsCards({ report }: { report: Report }) {
+export function TotalsTable({ report }: { report: Report }) {
   const { totals, prevTotals, range } = report;
   const deltaTitle = `对比 ${range.prevStartDate} 至 ${range.prevEndDate}`;
+  const metrics = [
+    {
+      label: "点击次数",
+      value: formatCount(totals.clicks),
+      delta: percentDelta(totals.clicks, prevTotals.clicks),
+    },
+    {
+      label: "展示次数",
+      value: formatCount(totals.impressions),
+      delta: percentDelta(totals.impressions, prevTotals.impressions),
+    },
+    {
+      label: "点击率",
+      value: formatCtr(totals.ctr),
+      delta: percentDelta(totals.ctr, prevTotals.ctr),
+    },
+    {
+      label: "平均排名",
+      value: formatPosition(totals.position),
+      delta: positionDelta(totals.position, prevTotals.position),
+    },
+  ];
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <TotalCard
-        label="点击次数"
-        value={formatCount(totals.clicks)}
-        delta={percentDelta(totals.clicks, prevTotals.clicks)}
-        deltaTitle={deltaTitle}
-      />
-      <TotalCard
-        label="展示次数"
-        value={formatCount(totals.impressions)}
-        delta={percentDelta(totals.impressions, prevTotals.impressions)}
-        deltaTitle={deltaTitle}
-      />
-      <TotalCard
-        label="CTR"
-        value={formatCtr(totals.ctr)}
-        delta={percentDelta(totals.ctr, prevTotals.ctr)}
-        deltaTitle={deltaTitle}
-      />
-      <TotalCard
-        label="平均排名"
-        value={formatPosition(totals.position)}
-        delta={positionDelta(totals.position, prevTotals.position)}
-        deltaTitle={deltaTitle}
-      />
-    </div>
-  );
-}
-
-function TotalCard({
-  label,
-  value,
-  delta,
-  deltaTitle,
-}: {
-  label: string;
-  value: string;
-  delta: Delta;
-  deltaTitle: string;
-}) {
-  return (
-    <div className="rounded-lg border border-base-300 bg-base-100 p-4">
-      <div className="text-xs uppercase tracking-wide text-base-content/60">
-        {label}
-      </div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span className="text-2xl font-semibold">{value}</span>
-        {delta ? (
-          <span
-            className={`text-xs ${delta.improved ? "text-success" : "text-error"}`}
-            title={deltaTitle}
-          >
-            {delta.text}
-          </span>
-        ) : null}
-      </div>
+    <div className="rounded-xl border border-border bg-card p-4">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-full">指标</TableHead>
+            <TableHead className="min-w-32 text-right">数值</TableHead>
+            <TableHead className="min-w-32 text-right" title={deltaTitle}>
+              变化
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {metrics.map(({ label, value, delta }) => (
+            <TableRow key={label}>
+              <TableCell>{label}</TableCell>
+              <TableCell className="text-right tabular-nums">{value}</TableCell>
+              <TableCell
+                className={`text-right tabular-nums ${delta ? (delta.improved ? "text-success" : "text-destructive") : "text-muted-foreground"}`}
+                title={deltaTitle}
+              >
+                {delta?.text ?? "—"}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }
@@ -221,26 +188,45 @@ function TotalCard({
 export function DimensionTable({
   rows,
   keyLabel,
+  isFiltered,
+  isPastEnd,
+  onClearFilters,
+  onFirstPage,
 }: {
   rows: SearchPerformanceTableRow[];
   keyLabel: string;
+  isFiltered: boolean;
+  isPastEnd: boolean;
+  onClearFilters: () => void;
+  onFirstPage: () => void;
 }) {
   const columns = useMemo(() => buildDimensionColumns(keyLabel), [keyLabel]);
-  const table = useAppTable({
+  const table = useDataTable({
     data: rows,
     columns,
     withSorting: true,
     initialState: { sorting: [{ id: "clicks", desc: true }] },
   });
   return (
-    <AppDataTable
+    <DataTable
       table={table}
-      className="table table-zebra table-sm"
-      wrapperClassName="overflow-x-auto"
+      isFiltered={isFiltered && !isPastEnd}
+      onClearFilters={onClearFilters}
       empty={
-        <p className="p-6 text-sm text-base-content/60">
-          此周期暂无数据。Search Console 数据通常会延迟几天。
-        </p>
+        isPastEnd
+          ? {
+              title: "此页没有数据",
+              description: "当前页已超出结果范围。",
+              action: (
+                <Button variant="outline" size="sm" onClick={onFirstPage}>
+                  回到第一页
+                </Button>
+              ),
+            }
+          : {
+              title: "还没有 Search Console 数据",
+              description: "Search Console 数据可能需要几天才会出现。",
+            }
       }
     />
   );
@@ -249,36 +235,45 @@ export function DimensionTable({
 export function StrikingDistanceTable({
   projectId,
   rows,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+  isFiltered,
+  onClearFilters,
 }: {
   projectId: string;
   rows: Report["strikingDistance"];
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
+  isFiltered: boolean;
+  onClearFilters: () => void;
 }) {
   const queryClient = useQueryClient();
   const anchorRef = useSelectionAnchor();
   const [rowSelection, setRowSelection] = useState({});
   const columns = useMemo(() => buildStrikingColumns(anchorRef), [anchorRef]);
-  const table = useAppTable({
+  const table = useDataTable({
     data: rows,
     columns,
     withSorting: true,
     withPagination: true,
     enableRowSelection: true,
-    state: { rowSelection },
+    state: { rowSelection, pagination: { pageIndex: page - 1, pageSize } },
     onRowSelectionChange: setRowSelection,
-    getRowId: (row) => `${row.query}::${row.page}`,
+    // The server collapses each query to its top page, so queries are unique.
+    getRowId: (row) => row.query,
     initialState: {
       sorting: [{ id: "impressions", desc: true }],
-      // All rows are already loaded; paginate client-side to keep the table
-      // short. 50/page by default.
-      pagination: { pageIndex: 0, pageSize: 50 },
     },
   });
-  const pagination = table.getState().pagination;
+  const isPastEnd = page > 1 && table.getRowModel().rows.length === 0;
 
-  // Rows are query x page; saving/copying dedupes to the query strings.
-  const selectedQueries = Array.from(
-    new Set(table.getSelectedRowModel().rows.map((row) => row.original.query)),
-  );
+  const selectedQueries = table
+    .getSelectedRowModel()
+    .rows.map((row) => row.original.query);
 
   const copyKeywords = async () => {
     try {
@@ -288,7 +283,9 @@ export function StrikingDistanceTable({
         .map((query) => normalizeExportValue(query))
         .join("\n");
       await navigator.clipboard.writeText(text);
-      toast.success(`已复制 ${selectedQueries.length} 个关键词`);
+      toast.success(
+        `已复制 ${selectedQueries.length} 个关键词`,
+      );
     } catch {
       toast.error("无法复制到剪贴板");
     }
@@ -305,49 +302,60 @@ export function StrikingDistanceTable({
       void queryClient.invalidateQueries({
         queryKey: ["savedKeywords", projectId],
       });
-      toast.success(`已保存 ${keywords.length} 个关键词`);
+      toast.success(
+        `已保存 ${keywords.length} 个关键词`,
+      );
       setRowSelection({});
     },
-    onError: (error) => {
-      toast.error(getStandardErrorMessage(error, "无法保存关键词"));
-    },
   });
-
-  if (rows.length === 0) {
-    return (
-      <p className="p-6 text-sm text-base-content/60">
-        此周期暂无接近突破的查询词。此类查询词通常位于第 5 到 20
-        名，优化后更有机会带来流量增长。
-      </p>
-    );
-  }
 
   return (
     <>
       <div className="p-4">
-        <p className="mb-3 text-sm text-base-content/60">
-          查询词当前位于第 5 到 20
-          名，并按展示次数排序。优化对应页面可帮助其进入更靠前的结果。
+        <p className="mb-3 text-sm text-muted-foreground">
+          排名在 5 到 20 位的查询，按展示次数排序。优化所列页面可将它们推入前列。
         </p>
-        <AppDataTable
+        <DataTable
           table={table}
-          className="table table-zebra table-sm"
-          wrapperClassName="overflow-x-auto"
+          isFiltered={isFiltered && !isPastEnd}
+          onClearFilters={onClearFilters}
+          empty={
+            isPastEnd
+              ? {
+                  title: "此页没有数据",
+                  description: "当前页已超出结果范围。",
+                  action: (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onPageChange(1)}
+                    >
+                      回到第一页
+                    </Button>
+                  ),
+                }
+              : {
+                  title: "暂无冲击距离查询",
+                  description: "排名在 5 到 20 位的查询会出现在这里。",
+                }
+          }
         />
       </div>
-      <TablePagination
-        page={pagination.pageIndex + 1}
-        pageSize={pagination.pageSize}
-        pageSizes={SEARCH_PERFORMANCE_PAGE_SIZES}
-        totalCount={rows.length}
-        hasNextPage={table.getCanNextPage()}
-        isLoading={false}
-        onPageChange={(nextPage) => table.setPageIndex(nextPage - 1)}
-        onPageSizeChange={(nextSize) => table.setPageSize(nextSize)}
-      />
+      {!isPastEnd && rows.length > 0 && (
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          pageSizes={SEARCH_PERFORMANCE_PAGE_SIZES}
+          totalCount={rows.length}
+          hasNextPage={table.getCanNextPage()}
+          isLoading={false}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
+      )}
       <TableBulkActionBar
         selectedCount={selectedQueries.length}
-        selectedLabel="个查询词"
+        selectedLabel="查询"
         onClear={() => setRowSelection({})}
         actions={
           <div className="flex items-center gap-1 px-1.5">

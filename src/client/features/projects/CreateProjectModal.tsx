@@ -1,133 +1,182 @@
-import * as React from "react";
+import { projectsQueryOptions } from "@/client/features/projects/projectQueries";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { revalidateLogic } from "@tanstack/react-form";
 import { toast } from "sonner";
-import { Modal } from "@/client/components/Modal";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import { z } from "zod";
+import { useAppForm } from "@/client/components/form/useAppForm";
+import { Button } from "@/client/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/client/components/ui/dialog";
+import { FieldDescription } from "@/client/components/ui/field";
 import { setLastProjectId } from "@/client/lib/active-project";
+import {
+  getErrorCode,
+  getStandardErrorMessage,
+} from "@/client/lib/error-messages";
 import {
   DEFAULT_LOCATION_CODE,
   getLanguageCode,
 } from "@/client/features/keywords/locations";
 import { ProjectMarketFields } from "@/client/features/projects/ProjectMarketFields";
+import { toastInitialAudit } from "@/client/features/projects/initialAuditToast";
 import { createProject } from "@/serverFunctions/projects";
+import { isEveryAppClientAuthMode } from "@/lib/auth-mode";
+
+const createProjectSchema = z.object({
+  name: z.string().trim().min(1, "请输入项目名称"),
+  domain: z.string(),
+  market: z.object({ locationCode: z.number(), languageCode: z.string() }),
+});
+
+// The server sends only the error code, so the field messages live here.
+const SERVER_FIELD_ERRORS: Record<string, Record<string, string>> = {
+  VALIDATION_ERROR: { domain: "请输入有效域名，例如 acme.com。" },
+  CONFLICT: {
+    name: "已有一个名为「Default」且未填写域名的项目。请换个名称或添加域名。",
+  },
+};
 
 export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [name, setName] = React.useState("");
-  const [domain, setDomain] = React.useState("");
-  const [market, setMarket] = React.useState({
-    locationCode: DEFAULT_LOCATION_CODE,
-    languageCode: getLanguageCode(DEFAULT_LOCATION_CODE),
-  });
 
   const createMutation = useMutation({
-    mutationFn: () =>
+    mutationFn: (values: z.infer<typeof createProjectSchema>) =>
       createProject({
         data: {
-          name: name.trim(),
-          domain: domain.trim() || undefined,
-          ...market,
+          name: values.name.trim(),
+          domain: values.domain.trim() || undefined,
+          ...values.market,
         },
       }),
+    // The form shows field errors inline and toasts the rest itself.
+    meta: { errorToast: false },
     onSuccess: async (created) => {
       setLastProjectId(created.id);
-      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({
+        queryKey: projectsQueryOptions().queryKey,
+      });
       await queryClient.invalidateQueries({
         queryKey: ["dashboardActivation"],
       });
       onClose();
       toast.success("项目已创建");
+      toastInitialAudit(created.initialAudit);
       // Continue setup through the new project’s dashboard.
       void navigate({
         to: "/p/$projectId",
         params: { projectId: created.id },
       });
     },
-    onError: (error) =>
-      toast.error(getStandardErrorMessage(error, "项目创建失败")),
   });
 
-  const isPending = createMutation.isPending;
-
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (isPending) return;
-    if (!name.trim()) {
-      toast.error("请输入项目名称");
-      return;
-    }
-    createMutation.mutate();
-  };
+  const form = useAppForm({
+    defaultValues: {
+      name: "",
+      domain: "",
+      market: {
+        locationCode: DEFAULT_LOCATION_CODE,
+        languageCode: getLanguageCode(DEFAULT_LOCATION_CODE),
+      },
+    },
+    validationLogic: revalidateLogic(),
+    validators: { onDynamic: createProjectSchema },
+    onSubmit: async ({ value, formApi }) => {
+      try {
+        await createMutation.mutateAsync(value);
+      } catch (error) {
+        const fields = SERVER_FIELD_ERRORS[getErrorCode(error) ?? ""];
+        if (fields) {
+          formApi.setErrorMap({ onSubmit: { fields } });
+        } else {
+          toast.error(getStandardErrorMessage(error));
+        }
+      }
+    },
+  });
 
   return (
-    <Modal
-      maxWidth="max-w-md"
-      onClose={isPending ? undefined : onClose}
-      labelledBy="create-project-title"
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !createMutation.isPending) onClose();
+      }}
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <h2 id="create-project-title" className="text-lg font-semibold">
-          新建项目
-        </h2>
+      <DialogContent showCloseButton={false} className="sm:max-w-md">
+        <form.AppForm>
+          <form.Form className="flex flex-col gap-4">
+            <DialogHeader>
+              <DialogTitle>新建项目</DialogTitle>
+            </DialogHeader>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">名称</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="示例公司"
-            maxLength={120}
-            autoFocus
-            className="input input-bordered w-full"
-          />
-        </label>
+            <form.AppField name="name">
+              {(field) => (
+                <field.TextField
+                  label="名称"
+                  placeholder="示例公司"
+                  maxLength={120}
+                  required
+                />
+              )}
+            </form.AppField>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">
-            域名 <span className="text-base-content/50">（可选）</span>
-          </span>
-          <input
-            type="text"
-            value={domain}
-            onChange={(event) => setDomain(event.target.value)}
-            placeholder="example.com"
-            maxLength={255}
-            className="input input-bordered w-full"
-          />
-          <span className="text-xs text-base-content/50">
-            创建项目后，您可以连接 Search Console 并设置排名追踪。
-          </span>
-        </label>
+            <p className="text-sm text-muted-foreground">
+              {isEveryAppClientAuthMode()
+                ? "添加网站后会启动 50 页站点审计。"
+                : "添加网站后会启动 50 页扫描并渲染 JavaScript。渲染会消耗积分。"}
+            </p>
+            <form.AppField name="domain">
+              {(field) => (
+                <field.TextField
+                  label={
+                    <>
+                      域名{" "}
+                      <span className="font-normal text-muted-foreground">
+                        （可选）
+                      </span>
+                    </>
+                  }
+                  description="创建项目后可连接 Search Console 并设置排名追踪。"
+                  placeholder="example.com"
+                  maxLength={255}
+                />
+              )}
+            </form.AppField>
 
-        <div className="flex flex-col gap-1.5">
-          <ProjectMarketFields value={market} onChange={setMarket} />
-          <span className="text-xs text-base-content/50">
-            关键词、SERP
-            和域名数据默认使用此国家或地区及语言，调用时也可另行指定。之后可在项目设置中修改。
-          </span>
-        </div>
+            <div className="flex flex-col gap-2">
+              <form.Field name="market">
+                {(field) => (
+                  <ProjectMarketFields
+                    value={field.state.value}
+                    onChange={field.handleChange}
+                  />
+                )}
+              </form.Field>
+              <FieldDescription>
+                关键词、SERP 和域名数据会使用该国家/地区和语言，除非某次调用另行指定。之后可在项目设置中更改。
+              </FieldDescription>
+            </div>
 
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onClose}
-            disabled={isPending}
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary btn-sm"
-            disabled={isPending}
-          >
-            创建项目
-          </button>
-        </div>
-      </form>
-    </Modal>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={onClose}
+                disabled={createMutation.isPending}
+              >
+                取消
+              </Button>
+              <form.SubmitButton>创建项目</form.SubmitButton>
+            </DialogFooter>
+          </form.Form>
+        </form.AppForm>
+      </DialogContent>
+    </Dialog>
   );
 }

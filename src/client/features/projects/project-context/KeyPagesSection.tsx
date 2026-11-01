@@ -1,27 +1,38 @@
 import * as React from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Badge } from "@/client/components/ui/badge";
+import { FormActions } from "@/client/components/FormActions";
+import { Input } from "@/client/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/client/components/ui/select";
 import {
   KEY_PAGE_ROLES,
   type KeyPageRole,
   type ProjectContextUpdate,
 } from "@/types/schemas/projectContext";
-import {
-  ConfirmDeleteButton,
-  EmptyState,
-  FormActions,
-  listClass,
-  Provenance,
-  RowActions,
-  SectionHeader,
-  useContextUpdate,
-  type ContextKeyPage,
-} from "./shared";
+import { EditableListSection } from "./EditableListSection";
+import { Provenance, useContextUpdate, type ContextKeyPage } from "./shared";
 
 const ROLE_LABELS: Record<KeyPageRole, string> = {
   hub: "枢纽页",
   spoke: "支撑页",
   money: "转化页",
   other: "其他",
+};
+const roleItems = KEY_PAGE_ROLES.map((role) => ({
+  value: role,
+  label: ROLE_LABELS[role],
+}));
+
+type KeyPageDraft = {
+  url: string;
+  role: KeyPageRole;
+  topic: string;
+  notes: string;
 };
 
 export function KeyPagesSection({
@@ -32,19 +43,17 @@ export function KeyPagesSection({
   keyPages: ContextKeyPage[];
 }) {
   const update = useContextUpdate(projectId);
-  const [adding, setAdding] = React.useState(false);
-  const [editingId, setEditingId] = React.useState<string | null>(null);
 
-  const save = (previousUrl: string | null, draft: KeyPageDraft) => {
+  const save = (
+    previousUrl: string | null,
+    draft: KeyPageDraft,
+    close: () => void,
+  ) => {
     const ops: ProjectContextUpdate[] = [];
-    // Key pages upsert by URL, so a retyped URL has to drop the old row before
-    // the new one lands.
     if (previousUrl && previousUrl !== draft.url.trim()) {
       ops.push({ removeKeyPages: [previousUrl] });
     }
-    // Send the fields even when blank: an omitted field means "keep what's
-    // stored" (so agent writes merge), so clearing one from the form has to
-    // send the empty string.
+    // Blank values clear stored fields. Omission would preserve agent writes.
     ops.push({
       addKeyPages: [
         {
@@ -55,115 +64,51 @@ export function KeyPagesSection({
         },
       ],
     });
-    update.mutate(ops, {
-      onSuccess: () => {
-        setAdding(false);
-        setEditingId(null);
-      },
-    });
+    update.mutate(ops, { onSuccess: close });
   };
 
   return (
-    <section className="space-y-3">
-      <SectionHeader
-        title="关键页面"
-        hint="撑起整个网站的少量页面清单，不是全站目录。"
-        action={
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs"
-            onClick={() => setAdding(true)}
-          >
-            <Plus className="size-3.5" />
-            添加页面
-          </button>
-        }
-      />
-
-      {adding ? (
-        <div className={listClass}>
-          <KeyPageForm
-            pending={update.isPending}
-            onCancel={() => setAdding(false)}
-            onSave={(draft) => save(null, draft)}
-          />
+    <EditableListSection
+      title="关键页面"
+      hint="撑起整个网站的少量页面清单，不是全站目录。"
+      addLabel="添加页面"
+      emptyTitle="还没有关键页面"
+      emptyDescription="添加必须获得排名的少数页面，或让智能体根据最近一次站点审计提出建议。"
+      items={keyPages}
+      getId={(item) => item.id}
+      getLabel={(item) => item.url}
+      pending={update.isPending}
+      onRemove={(item) => update.mutate([{ removeKeyPages: [item.url] }])}
+      renderItem={(item) => (
+        <div className="min-w-0 space-y-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <span className="truncate text-sm font-medium">{item.url}</span>
+            <Badge variant="secondary" size="sm">
+              {ROLE_LABELS[item.role]}
+            </Badge>
+          </div>
+          {item.topic ? (
+            <p className="text-sm text-muted-foreground">
+              目标：{item.topic}
+            </p>
+          ) : null}
+          {item.notes ? (
+            <p className="text-sm text-muted-foreground">{item.notes}</p>
+          ) : null}
+          <Provenance by={item.updatedBy} at={item.updatedAt} />
         </div>
-      ) : null}
-
-      {keyPages.length === 0 ? (
-        adding ? null : (
-          <EmptyState>
-            还没有关键页面。请添加必须获得排名的那几页，或让智能体根据最近一次站点审计来提议。
-          </EmptyState>
-        )
-      ) : (
-        <ul className={listClass}>
-          {keyPages.map((page) =>
-            editingId === page.id ? (
-              <li key={page.id}>
-                <KeyPageForm
-                  initial={page}
-                  pending={update.isPending}
-                  onCancel={() => setEditingId(null)}
-                  onSave={(draft) => save(page.url, draft)}
-                />
-              </li>
-            ) : (
-              <li
-                key={page.id}
-                className="flex items-start justify-between gap-3 p-3"
-              >
-                <div className="min-w-0 space-y-0.5">
-                  <div className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="truncate text-sm font-medium">
-                      {page.url}
-                    </span>
-                    <span className="badge badge-ghost badge-sm shrink-0">
-                      {ROLE_LABELS[page.role]}
-                    </span>
-                  </div>
-                  {page.topic ? (
-                    <p className="text-sm text-base-content/70">
-                      主题：{page.topic}
-                    </p>
-                  ) : null}
-                  {page.notes ? (
-                    <p className="text-sm text-base-content/70">{page.notes}</p>
-                  ) : null}
-                  <Provenance by={page.updatedBy} at={page.updatedAt} />
-                </div>
-                <RowActions>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs"
-                    aria-label={`编辑 ${page.url}`}
-                    onClick={() => setEditingId(page.id)}
-                  >
-                    <Pencil className="size-3.5" />
-                  </button>
-                  <ConfirmDeleteButton
-                    label={`移除 ${page.url}`}
-                    pending={update.isPending}
-                    onConfirm={() =>
-                      update.mutate([{ removeKeyPages: [page.url] }])
-                    }
-                  />
-                </RowActions>
-              </li>
-            ),
-          )}
-        </ul>
       )}
-    </section>
+      renderForm={(item, close) => (
+        <KeyPageForm
+          initial={item}
+          pending={update.isPending}
+          onCancel={close}
+          onSave={(draft) => save(item?.url ?? null, draft, close)}
+        />
+      )}
+    />
   );
 }
-
-type KeyPageDraft = {
-  url: string;
-  role: KeyPageRole;
-  topic: string;
-  notes: string;
-};
 
 function KeyPageForm({
   initial,
@@ -185,68 +130,62 @@ function KeyPageForm({
 
   return (
     <form
-      className="space-y-2 bg-base-200/40 p-3"
+      className="space-y-2 bg-muted/40 p-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (!draft.url.trim() || pending) return;
         onSave(draft);
       }}
     >
-      <input
+      <Input
         autoFocus
-        type="text"
         value={draft.url}
         onChange={(event) => setDraft({ ...draft, url: event.target.value })}
         placeholder="example.com/pricing"
         maxLength={2048}
-        className="input input-bordered input-sm w-full"
-          aria-label="页面网址"
+        aria-label="页面网址"
       />
       <div className="grid gap-2 sm:grid-cols-2">
-        <select
+        <Select
+          items={roleItems}
           value={draft.role}
-          onChange={(event) =>
-            setDraft({
-              ...draft,
-              role:
-                KEY_PAGE_ROLES.find((role) => role === event.target.value) ??
-                draft.role,
-            })
-          }
-          className="select select-bordered select-sm w-full"
-          aria-label="页面角色"
+          onValueChange={(role) => {
+            if (role !== null) setDraft({ ...draft, role });
+          }}
         >
-          {KEY_PAGE_ROLES.map((role) => (
-            <option key={role} value={role}>
-              {ROLE_LABELS[role]}
-            </option>
-          ))}
-        </select>
-        <input
-          type="text"
+          <SelectTrigger className="w-full" aria-label="页面角色">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {KEY_PAGE_ROLES.map((role) => (
+              <SelectItem key={role} value={role}>
+                {ROLE_LABELS[role]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
           value={draft.topic}
           onChange={(event) =>
             setDraft({ ...draft, topic: event.target.value })
           }
           placeholder="目标主题（可选）"
           maxLength={200}
-          className="input input-bordered input-sm w-full"
           aria-label="目标主题"
         />
       </div>
-      <input
-        type="text"
+      <Input
         value={draft.notes}
         onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
-          placeholder="备注（可选）"
+        placeholder="备注（可选）"
         maxLength={500}
-        className="input input-bordered input-sm w-full"
-          aria-label="页面备注"
+        aria-label="页面备注"
       />
       <FormActions
         pending={pending}
         disabled={!draft.url.trim()}
         onCancel={onCancel}
+        size="xs"
       />
     </form>
   );

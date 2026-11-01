@@ -5,18 +5,25 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
-import { Loader2, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { getDomainKeywordSuggestions } from "@/serverFunctions/domain";
 import { addTrackingKeywords } from "@/serverFunctions/rank-tracking";
 import { isLabsLocationCode } from "@/client/features/keywords/locations";
-import { getStandardErrorMessage } from "@/client/lib/error-messages";
+import { Spinner } from "@/client/components/Spinner";
 import {
-  AppDataTable,
+  DataTable,
   makeSelectionColumn,
-  useAppTable,
-} from "@/client/components/table/AppDataTable";
-import { SortableHeader } from "./RankTrackingColumns";
+  useDataTable,
+} from "@/client/components/table/DataTable";
+import { Button } from "@/client/components/ui/button";
+import {
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/client/components/ui/dialog";
+import { SortableHeader } from "@/client/components/table/SortableHeader";
+import { RANK_TRACKING_HEADER_CLASS } from "./RankTrackingColumns";
 import {
   applyShiftRangeSelection,
   type SelectionAnchor,
@@ -39,8 +46,8 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       <SortableHeader
         column={column}
         label="关键词"
-        id="keyword"
-        tooltip="此域名获得排名的搜索词"
+        title="此域名获得排名的搜索词"
+        className={RANK_TRACKING_HEADER_CLASS}
       />
     ),
     cell: ({ getValue }) => (
@@ -55,8 +62,8 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       <SortableHeader
         column={column}
         label="排名"
-        id="position"
-        tooltip="当前 Google 排名"
+        title="当前 Google 排名"
+        className={RANK_TRACKING_HEADER_CLASS}
       />
     ),
     cell: ({ getValue }) => {
@@ -64,7 +71,7 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       return pos != null ? (
         pos
       ) : (
-        <span className="text-base-content/40">—</span>
+        <span className="text-muted-foreground">—</span>
       );
     },
     sortingFn: (rowA, rowB) => {
@@ -80,8 +87,8 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       <SortableHeader
         column={column}
         label="搜索量"
-        id="searchVolume"
-        tooltip="月搜索量"
+        title="月搜索量"
+        className={RANK_TRACKING_HEADER_CLASS}
       />
     ),
     cell: ({ getValue }) => {
@@ -89,7 +96,7 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       return vol != null ? (
         vol.toLocaleString()
       ) : (
-        <span className="text-base-content/40">—</span>
+        <span className="text-muted-foreground">—</span>
       );
     },
     sortingFn: (rowA, rowB) => {
@@ -105,8 +112,8 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       <SortableHeader
         column={column}
         label="流量"
-        id="traffic"
-        tooltip="预估每月自然搜索流量"
+        title="预估每月自然搜索流量"
+        className={RANK_TRACKING_HEADER_CLASS}
       />
     ),
     cell: ({ getValue }) => {
@@ -114,7 +121,7 @@ const baseColumns: ColumnDef<SuggestedKeyword>[] = [
       return traffic != null ? (
         Math.round(traffic).toLocaleString()
       ) : (
-        <span className="text-base-content/40">—</span>
+        <span className="text-muted-foreground">—</span>
       );
     },
     sortingFn: (rowA, rowB) => {
@@ -192,7 +199,7 @@ export function KeywordSuggestionStep({
     }
   }, [suggestionsQuery.data, hasInitialized]);
 
-  const table = useAppTable({
+  const table = useDataTable({
     data,
     columns,
     state: { rowSelection, sorting },
@@ -210,11 +217,8 @@ export function KeywordSuggestionStep({
     mutationFn: (keywords: string[]) =>
       addTrackingKeywords({ data: { projectId, configId, keywords } }),
     onSuccess: (result) => {
-      toast.success(`已添加 ${result.added} 个追踪关键词`);
+      toast.success(`已添加 ${result.added} 个关键词进行追踪`);
       onDone(configId);
-    },
-    onError: (error) => {
-      toast.error(getStandardErrorMessage(error, "关键词添加失败"));
     },
   });
 
@@ -227,131 +231,112 @@ export function KeywordSuggestionStep({
     }
   };
 
-  const sectionHeader = (title: string) => (
-    <div className="flex items-center justify-between">
-      <h2 id="keyword-suggestions-title" className="text-lg font-semibold">
-        {title}
-      </h2>
-      <button className="btn btn-ghost btn-sm btn-square" onClick={onClose}>
-        <X className="size-4" />
-      </button>
-    </div>
-  );
-
   if (!labsSupported) {
     return (
       <>
-        {sectionHeader("手动添加关键词")}
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <p className="text-xs text-base-content/50">
-            此国家或地区暂无排名关键词建议。继续后可手动添加需要追踪的关键词。
-          </p>
-          <button className="btn btn-primary btn-sm mt-2" onClick={onClose}>
-            继续
-          </button>
-        </div>
+        <StepHeader
+          title="手动添加关键词"
+          description="此国家或地区暂不支持排名关键词建议。请继续并手动添加要追踪的关键词。"
+        />
+        <DialogFooter>
+          <Button onClick={onClose}>继续</Button>
+        </DialogFooter>
       </>
     );
   }
 
-  // Loading state
   if (suggestionsQuery.isLoading) {
     return (
       <>
-        {sectionHeader("正在查找排名靠前的关键词…")}
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <Loader2 className="size-8 animate-spin text-primary" />
-          <p className="text-xs text-base-content/50">通常只需几秒钟</p>
+        <StepHeader title="正在查找排名靠前的关键词…" />
+        <div className="flex flex-col items-center justify-center py-16">
+          <Spinner label="通常只需几秒钟" />
         </div>
       </>
     );
   }
 
-  // Error state
   if (suggestionsQuery.isError) {
     return (
       <>
-        {sectionHeader("无法获取关键词")}
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <AlertCircle className="size-8 text-error" />
-          <p className="text-xs text-base-content/50">
-            可跳过此步骤，稍后再手动添加关键词。
-          </p>
-          <div className="flex gap-2 mt-2">
-            <button className="btn btn-primary btn-sm" onClick={onClose}>
-              跳过
-            </button>
-          </div>
-        </div>
+        <StepHeader
+          title="无法获取关键词"
+          description="可以跳过此步，稍后手动添加关键词。"
+        />
+        <DialogFooter>
+          <Button onClick={onClose}>跳过</Button>
+        </DialogFooter>
       </>
     );
   }
 
-  // Empty state
   if (data.length === 0) {
     return (
       <>
-        {sectionHeader("未找到排名数据")}
-        <div className="flex flex-col items-center justify-center gap-3 py-16">
-          <p className="text-xs text-base-content/50">
-            未找到 {domain} 当前有排名的关键词。您可以手动添加关键词。
-          </p>
-          <button className="btn btn-primary btn-sm mt-2" onClick={onClose}>
-            跳过
-          </button>
-        </div>
+        <StepHeader
+          title="未找到排名数据"
+          description={`未找到 ${domain} 当前有排名的关键词。可以手动添加。`}
+        />
+        <DialogFooter>
+          <Button onClick={onClose}>跳过</Button>
+        </DialogFooter>
       </>
     );
   }
 
-  // Data loaded
   return (
-    <div className="flex flex-col gap-3">
-      {sectionHeader("选择要追踪的关键词")}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-base-content/60">
-          已找到 {data.length} 个 {domain} 有排名的关键词。
-        </p>
-      </div>
-
-      <AppDataTable
-        table={table}
-        className="table table-xs table-pin-rows w-full"
-        wrapperClassName="overflow-y-auto max-h-[400px] border border-base-300 rounded-lg"
-        stickyHeader
-        getRowProps={(row) => ({
-          className: "hover:bg-base-200/50 cursor-pointer",
-          onClick: (event) => {
-            if (applyShiftRangeSelection(event, row, table, selectAnchorRef)) {
-              return;
-            }
-
-            row.toggleSelected();
-          },
-        })}
+    <>
+      <StepHeader
+        title="选择要追踪的关键词"
+        description={`找到 ${data.length} 个 ${domain} 有排名的关键词。`}
       />
 
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <p className="text-xs text-base-content/60">
-          已选择 {selectedCount} / {data.length} 个
+      <DataTable
+        table={table}
+        empty={{ title: "暂无关键词" }}
+        scrollClassName="max-h-[400px]"
+        onRowClick={(row, event) => {
+          if (applyShiftRangeSelection(event, row, table, selectAnchorRef)) {
+            return;
+          }
+          row.toggleSelected();
+        }}
+      />
+
+      <DialogFooter className="items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
+          已选 {selectedCount} / {data.length}
         </p>
         <div className="flex items-center gap-2">
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>
+          <Button variant="ghost" onClick={onClose}>
             跳过
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
+          </Button>
+          <Button
             onClick={handleAdd}
-            disabled={addMutation.isPending || selectedCount === 0}
+            pending={addMutation.isPending}
+            disabled={selectedCount === 0}
           >
-            {addMutation.isPending && (
-              <Loader2 className="size-3.5 animate-spin" />
-            )}
             保存关键词
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogFooter>
+    </>
+  );
+}
+
+function StepHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <DialogHeader>
+      <DialogTitle>{title}</DialogTitle>
+      {description ? (
+        <DialogDescription>{description}</DialogDescription>
+      ) : null}
+    </DialogHeader>
   );
 }

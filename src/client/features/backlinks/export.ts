@@ -1,4 +1,4 @@
-import { buildCsv, type CsvValue, downloadCsv } from "@/client/lib/csv";
+import type { CsvValue } from "@/client/lib/csv";
 import type {
   BacklinksSearchState,
   BacklinksTabRows,
@@ -39,7 +39,7 @@ export function buildBacklinksTabExport(args: {
         "首次发现",
         "最近发现",
         "已丢失",
-        "已失效",
+        "失效",
         "链接数量",
       ],
       rows: rows.backlinks.map((row) => [
@@ -103,19 +103,7 @@ export function buildBacklinksTabExport(args: {
   };
 }
 
-export function exportBacklinksTabCsv(args: {
-  tab: BacklinksSearchState["tab"];
-  target: string;
-  headers: string[];
-  rows: CsvValue[][];
-}) {
-  downloadCsv(
-    buildBacklinksTabCsvFilename(args.tab, args.target),
-    buildCsv(args.headers, args.rows),
-  );
-}
-
-export function buildBacklinksTabCsvFilename(
+export function buildBacklinksTabFilename(
   tab: BacklinksSearchState["tab"],
   target: string,
 ) {
@@ -133,5 +121,5 @@ export function buildBacklinksTabCsvFilename(
     .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 
-  return `backlinks-${tabPrefix}${normalizedTarget ? `-${normalizedTarget}` : ""}.csv`;
+  return `backlinks-${tabPrefix}${normalizedTarget ? `-${normalizedTarget}` : ""}`;
 }

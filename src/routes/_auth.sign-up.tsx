@@ -1,9 +1,15 @@
-import { useForm } from "@tanstack/react-form";
+import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { PageLoading } from "@/client/components/Spinner";
+import { useAppForm } from "@/client/components/form/useAppForm";
+import { Button } from "@/client/components/ui/button";
 import {
   AuthPageCard,
   AuthMethodChooser,
+  TermsAgreementNotice,
+  authInputClassName,
+  authSubmitClassName,
   authRedirectSearchSchema,
   useAuthPageState,
 } from "@/client/features/auth/AuthPage";
@@ -12,57 +18,91 @@ import {
   TurnstileWidget,
   useTurnstileCaptcha,
 } from "@/client/features/auth/TurnstileWidget";
-import { getFieldError, getFormError } from "@/client/lib/forms";
+import { passwordSchema } from "@/client/features/auth/passwordSchema";
+import { signUpStatusQueryOptions } from "@/client/features/auth/signUpStatus";
+import { useGoogleAuth } from "@/client/features/auth/useGoogleAuth";
+import { getFormError } from "@/client/lib/forms";
 import { captureClientEvent } from "@/client/lib/posthog";
 import { authClient } from "@/lib/auth-client";
-import { getSignInSearch, getVerifyEmailSearch } from "@/lib/auth-redirect";
 import {
-  HOSTED_PASSWORD_MAX_LENGTH,
-  HOSTED_PASSWORD_MIN_LENGTH,
-} from "@/lib/auth-options";
+  getSignInSearch,
+  getVerifyEmailSearch,
+  toAuthCallbackURL,
+} from "@/lib/auth-redirect";
 import { z } from "zod";
+
+const UTM_PARAMS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+] as const;
 
 const signUpSchema = z
   .object({
-    name: z.string().trim(),
-    email: z.string().trim().email("Enter a valid email address."),
-    password: z
-      .string()
-      .min(
-        HOSTED_PASSWORD_MIN_LENGTH,
-        `Password must be at least ${HOSTED_PASSWORD_MIN_LENGTH} characters.`,
-      )
-      .max(
-        HOSTED_PASSWORD_MAX_LENGTH,
-        `Password must be at most ${HOSTED_PASSWORD_MAX_LENGTH} characters.`,
-      ),
+    email: z.string().trim().email("请输入有效的邮箱地址。"),
+    password: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((value) => value.password === value.confirmPassword, {
-    message: "Passwords do not match.",
+    message: "两次输入的密码不一致。",
     path: ["confirmPassword"],
   });
 
 export const Route = createFileRoute("/_auth/sign-up")({
-  validateSearch: authRedirectSearchSchema,
+  validateSearch: authRedirectSearchSchema.extend({
+    // A site checked with the marketing site's free tool; onboarding
+    // prefills it, and the website step validates it on save.
+    domain: z.string().optional().catch(undefined),
+    // An ad's campaign tags, which the marketing site's landing pages carry
+    // onto the sign-up link. Passed on through the post-signup redirect so the
+    // server can save the campaign on the new account.
+    utm_source: z.string().optional().catch(undefined),
+    utm_medium: z.string().optional().catch(undefined),
+    utm_campaign: z.string().optional().catch(undefined),
+    utm_content: z.string().optional().catch(undefined),
+  }),
   component: SignUpPage,
 });
 
 function SignUpPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { redirectTo, isHostedMode } = useAuthPageState(search.redirect);
-  const postSignupRedirect = redirectTo === "/" ? "/onboarding" : redirectTo;
+  const { redirectTo, isHostedMode, isBetterAuthMode } = useAuthPageState(
+    search.redirect,
+  );
+  const onboardingSearch = new URLSearchParams();
+  if (search.domain) onboardingSearch.set("domain", search.domain);
+  for (const name of UTM_PARAMS) {
+    const value = search[name];
+    if (value) onboardingSearch.set(name, value);
+  }
+  const postSignupRedirect =
+    redirectTo !== "/"
+      ? redirectTo
+      : onboardingSearch.size > 0
+        ? `/onboarding?${onboardingSearch.toString()}`
+        : "/onboarding";
   const [showEmailForm, setShowEmailForm] = useState(false);
-  const google = useGoogleSignUp({ redirectTo, postSignupRedirect });
+  const google = useGoogleAuth({ redirectTo, postSignupRedirect });
+  // The standalone Docker edition: no Google, no email verification, and the
+  // server accepts a sign-up only for the first account or an invited address
+  // (src/server/standalone/sign-up.ts).
+  const standalone = isBetterAuthMode && !isHostedMode;
+  const invited = redirectTo.startsWith("/accept-invitation/");
+  const signUpStatus = useQuery({
+    ...signUpStatusQueryOptions(),
+    enabled: standalone,
+  });
+  const firstAccount = signUpStatus.data?.firstAccount === true;
+  const emailFormVisible = showEmailForm || standalone;
 
   // Turnstile is active only in hosted mode with a configured site key.
   const isTurnstileEnabled = isHostedMode && Boolean(TURNSTILE_SITE_KEY);
   const captcha = useTurnstileCaptcha();
 
-  const form = useForm({
+  const form = useAppForm({
     defaultValues: {
-      name: "",
       email: "",
       password: "",
       confirmPassword: "",
@@ -72,22 +112,11 @@ function SignUpPage() {
     },
     onSubmit: async ({ formApi, value }) => {
       const captchaToken = captcha.tokenRef.current;
-      if (isTurnstileEnabled && !captchaToken) {
-        formApi.setErrorMap({
-          onSubmit: {
-            form: "Please complete the captcha to continue.",
-            fields: {},
-          },
-        });
-        return;
-      }
       try {
         const email = value.email.trim();
         captureClientEvent("auth:sign_up_submit", {
           redirect_to: redirectTo,
         });
-        const resolvedName =
-          value.name.trim() || email.split("@")[0] || "OpenSEO User";
         const verificationCallbackURL = new URL(
           "/verify-email",
           window.location.origin,
@@ -103,7 +132,7 @@ function SignUpPage() {
           );
         }
         const result = await authClient.signUp.email({
-          name: resolvedName,
+          name: email.split("@")[0] || "OpenSEO User",
           email,
           password: value.password,
           callbackURL: verificationCallbackURL.toString(),
@@ -121,7 +150,7 @@ function SignUpPage() {
           if (isTurnstileEnabled) captcha.reset();
           formApi.setErrorMap({
             onSubmit: {
-              form: result.error.message || "Unable to create account.",
+              form: result.error.message || "无法创建账户。",
               fields: {},
             },
           });
@@ -131,6 +160,27 @@ function SignUpPage() {
         captureClientEvent("auth:sign_up_success", {
           redirect_to: redirectTo,
         });
+        if (standalone) {
+          // Nothing to verify here, and autoSignIn is off so the operator's
+          // create-user never mints a session: sign in explicitly, and the
+          // layout sends the new session to redirectTo.
+          const signedIn = await authClient.signIn.email({
+            email,
+            password: value.password,
+            callbackURL: toAuthCallbackURL(redirectTo),
+          });
+          if (signedIn.error) {
+            formApi.setErrorMap({
+              onSubmit: {
+                form:
+                  signedIn.error.message ||
+                  "账户已创建。请登录以继续。",
+                fields: {},
+              },
+            });
+          }
+          return;
+        }
         void navigate({
           to: "/verify-email",
           search: getVerifyEmailSearch(email, postSignupRedirect),
@@ -140,7 +190,7 @@ function SignUpPage() {
         if (isTurnstileEnabled) captcha.reset();
         formApi.setErrorMap({
           onSubmit: {
-            form: "Unable to create account right now. Please try again.",
+            form: "暂时无法创建账户，请重试。",
             fields: {},
           },
         });
@@ -148,54 +198,75 @@ function SignUpPage() {
     },
   });
 
+  if (standalone && !firstAccount && !invited) {
+    if (signUpStatus.isPending) return <PageLoading />;
+    return (
+      <AuthPageCard
+        title="注册已关闭"
+        helperText="请向管理员索取邀请。"
+        footer={
+          <p className="text-sm">
+            <Link
+              to="/sign-in"
+              search={getSignInSearch(redirectTo)}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              返回登录
+            </Link>
+          </p>
+        }
+      >
+        {null}
+      </AuthPageCard>
+    );
+  }
+
   return (
     <AuthPageCard
-      title="Create your account"
+      title={firstAccount ? "创建管理员账户" : "创建账户"}
+      helperText={
+        firstAccount
+          ? "此安装还没有账户。第一个账户会成为管理员。"
+          : invited
+            ? "请使用收到邀请的邮箱地址。"
+            : undefined
+      }
       footer={
-        isHostedMode ? (
+        standalone ? (
+          firstAccount ? null : (
+            <p className="text-sm text-foreground/50">
+              已有账户？{" "}
+              <Link
+                to="/sign-in"
+                search={getSignInSearch(redirectTo)}
+                className="text-foreground underline underline-offset-2 hover:text-foreground/80 transition-colors"
+              >
+                登录
+              </Link>
+            </p>
+          )
+        ) : isHostedMode ? (
           showEmailForm ? (
             <button
               type="button"
-              className="text-sm text-base-content underline underline-offset-2 hover:text-base-content/80 transition-colors"
+              className="text-sm text-foreground underline underline-offset-2 hover:text-foreground/80 transition-colors"
               onClick={() => {
                 setShowEmailForm(false);
                 google.clearError();
               }}
             >
-              Back to signup
+              返回注册
             </button>
           ) : (
             <div className="space-y-4">
-              <p className="text-sm leading-relaxed text-base-content/60">
-                By signing up, you agree to our{" "}
-                <a
-                  href="https://openseo.so/terms-and-conditions"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-base-content underline underline-offset-2 hover:text-base-content/80 transition-colors"
-                >
-                  Terms
-                </a>{" "}
-                and{" "}
-                <a
-                  href="https://openseo.so/privacy"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-base-content underline underline-offset-2 hover:text-base-content/80 transition-colors"
-                >
-                  Privacy Policy
-                </a>
-                .
-              </p>
-
-              <p className="text-sm text-base-content/50">
-                Already have an account?{" "}
+              <p className="text-sm text-foreground/50">
+                已有账户？{" "}
                 <Link
                   to="/sign-in"
                   search={getSignInSearch(redirectTo)}
-                  className="text-base-content underline underline-offset-2 hover:text-base-content/80 transition-colors"
+                  className="text-foreground underline underline-offset-2 hover:text-foreground/80 transition-colors"
                 >
-                  Sign in
+                  登录
                 </Link>
               </p>
             </div>
@@ -203,10 +274,10 @@ function SignUpPage() {
         ) : null
       }
     >
-      {!showEmailForm ? (
+      {!emailFormVisible ? (
         <>
           <AuthMethodChooser
-            googleLabel="Continue with Google"
+            googleLabel="使用 Google 继续"
             disabled={!isHostedMode}
             isBusy={google.isStarting}
             onContinueWithGoogle={() => {
@@ -217,199 +288,95 @@ function SignUpPage() {
               google.clearError();
             }}
           />
+          {isHostedMode ? (
+            <TermsAgreementNotice action="继续" />
+          ) : null}
           {google.error ? (
-            <p className="text-sm text-error">{google.error}</p>
+            <p className="text-sm text-destructive">{google.error}</p>
           ) : null}
         </>
       ) : (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void form.handleSubmit();
-          }}
-        >
-          <form.Field name="name">
-            {(field) => {
-              const error = getFieldError(field.state.meta.errors);
+        <form.AppForm>
+          <form.Form className="space-y-4">
+            <form.AppField name="email">
+              {(field) => (
+                <field.TextField
+                  label="邮箱地址"
+                  hideLabel
+                  className={authInputClassName}
+                  type="email"
+                  placeholder="邮箱地址…"
+                  autoComplete="email"
+                  required
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="password">
+              {(field) => (
+                <field.TextField
+                  label="密码"
+                  hideLabel
+                  className={authInputClassName}
+                  type="password"
+                  placeholder="密码…"
+                  autoComplete="new-password"
+                  required
+                />
+              )}
+            </form.AppField>
+            <form.AppField name="confirmPassword">
+              {(field) => (
+                <field.TextField
+                  label="确认密码"
+                  hideLabel
+                  className={authInputClassName}
+                  type="password"
+                  placeholder="确认密码…"
+                  autoComplete="new-password"
+                  required
+                />
+              )}
+            </form.AppField>
 
-              return (
-                <div>
-                  <input
-                    type="text"
-                    className="input input-bordered w-full"
-                    placeholder="Name (optional)..."
-                    value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    autoComplete="name"
-                    disabled={!isHostedMode}
-                  />
-                  {error ? (
-                    <p className="mt-1 text-sm text-error">{error}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
+            {isTurnstileEnabled ? (
+              <TurnstileWidget
+                onToken={captcha.onToken}
+                resetNonce={captcha.resetNonce}
+              />
+            ) : null}
 
-          <form.Field name="email">
-            {(field) => {
-              const error = getFieldError(field.state.meta.errors);
-
-              return (
-                <div>
-                  <input
-                    type="email"
-                    className="input input-bordered w-full"
-                    placeholder="Email address..."
-                    value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    autoComplete="email"
-                    disabled={!isHostedMode}
-                    required
-                  />
-                  {error ? (
-                    <p className="mt-1 text-sm text-error">{error}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-
-          <form.Field name="password">
-            {(field) => {
-              const error = getFieldError(field.state.meta.errors);
-
-              return (
-                <div>
-                  <input
-                    type="password"
-                    className="input input-bordered w-full"
-                    placeholder="Password..."
-                    value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    autoComplete="new-password"
-                    disabled={!isHostedMode}
-                    required
-                    minLength={HOSTED_PASSWORD_MIN_LENGTH}
-                    maxLength={HOSTED_PASSWORD_MAX_LENGTH}
-                  />
-                  {error ? (
-                    <p className="mt-1 text-sm text-error">{error}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-
-          <form.Field name="confirmPassword">
-            {(field) => {
-              const error = getFieldError(field.state.meta.errors);
-
-              return (
-                <div>
-                  <input
-                    type="password"
-                    className="input input-bordered w-full"
-                    placeholder="Confirm password..."
-                    value={field.state.value}
-                    onChange={(event) => field.handleChange(event.target.value)}
-                    autoComplete="new-password"
-                    disabled={!isHostedMode}
-                    required
-                    minLength={HOSTED_PASSWORD_MIN_LENGTH}
-                    maxLength={HOSTED_PASSWORD_MAX_LENGTH}
-                  />
-                  {error ? (
-                    <p className="mt-1 text-sm text-error">{error}</p>
-                  ) : null}
-                </div>
-              );
-            }}
-          </form.Field>
-
-          {isTurnstileEnabled ? (
-            <TurnstileWidget
-              onToken={captcha.onToken}
-              resetNonce={captcha.resetNonce}
-            />
-          ) : null}
-
-          <form.Subscribe
-            selector={(state) => ({
-              submitError: state.errorMap.onSubmit,
-              isSubmitting: state.isSubmitting,
-            })}
-          >
-            {({ submitError, isSubmitting }) => {
-              const errorMessage = getFormError(submitError);
-              return (
-                <>
-                  {errorMessage ? (
-                    <p className="text-sm text-error">{errorMessage}</p>
-                  ) : null}
-                  <button
-                    className="btn btn-soft w-full"
-                    disabled={
-                      !isHostedMode ||
-                      isSubmitting ||
-                      (isTurnstileEnabled && !captcha.hasToken)
-                    }
-                  >
-                    {isSubmitting ? "Creating account..." : "Create account"}
-                  </button>
-                </>
-              );
-            }}
-          </form.Subscribe>
-        </form>
+            <form.Subscribe
+              selector={(state) => ({
+                submitError: state.errorMap.onSubmit,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ submitError, isSubmitting }) => {
+                const errorMessage = getFormError(submitError);
+                return (
+                  <>
+                    {errorMessage ? (
+                      <p className="text-sm text-destructive">{errorMessage}</p>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      className={authSubmitClassName}
+                      pending={isSubmitting}
+                      disabled={isTurnstileEnabled && !captcha.hasToken}
+                    >
+                      {isSubmitting ? "正在创建账户…" : "创建账户"}
+                    </Button>
+                    {isHostedMode ? (
+                      <TermsAgreementNotice action="创建账户" />
+                    ) : null}
+                  </>
+                );
+              }}
+            </form.Subscribe>
+          </form.Form>
+        </form.AppForm>
       )}
     </AuthPageCard>
   );
-}
-
-// Google sign-up: kicks off the social OAuth redirect and surfaces its error.
-function useGoogleSignUp({
-  redirectTo,
-  postSignupRedirect,
-}: {
-  redirectTo: string;
-  postSignupRedirect: string;
-}) {
-  const [isStarting, setIsStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const start = async () => {
-    setError(null);
-    setIsStarting(true);
-
-    try {
-      captureClientEvent("auth:sign_up_google_start", {
-        redirect_to: redirectTo,
-      });
-      const result = await authClient.signIn.social({
-        provider: "google",
-        callbackURL: redirectTo,
-        newUserCallbackURL: postSignupRedirect,
-        requestSignUp: true,
-      });
-
-      if (result.error) {
-        setError(
-          result.error.message || "Google sign up is not available right now.",
-        );
-        setIsStarting(false);
-      }
-    } catch {
-      setError("Google sign up is not available right now.");
-      setIsStarting(false);
-    }
-  };
-
-  return {
-    isStarting,
-    error,
-    start,
-    clearError: () => setError(null),
-  };
 }
