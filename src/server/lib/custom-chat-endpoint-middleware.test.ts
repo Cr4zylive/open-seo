@@ -9,10 +9,10 @@ import {
 describe("softenCustomEndpointParams", () => {
   it("strips temperature and rewrites json schema output into an auto submit tool", () => {
     const schema = {
-      type: "object",
-      properties: { name: { type: "string" } },
+      type: "object" as const,
+      properties: { name: { type: "string" as const } },
       required: ["name"],
-    } as const;
+    };
     const next = softenCustomEndpointParams({
       prompt: [{ role: "system", content: "Return a topic." }],
       temperature: 0,
@@ -30,10 +30,11 @@ describe("softenCustomEndpointParams", () => {
         inputSchema: schema,
       }),
     ]);
-    expect(next.prompt[0]).toMatchObject({
-      role: "system",
-      content: expect.stringContaining(CUSTOM_CHAT_SUBMIT_TOOL),
-    });
+    const first = next.prompt[0];
+    if (first?.role !== "system") {
+      throw new Error("missing system instruction");
+    }
+    expect(first.content).toContain(CUSTOM_CHAT_SUBMIT_TOOL);
   });
 
   it("softens forced tool_choice when tools are already present", () => {
@@ -82,6 +83,7 @@ describe("materializeStructuredOutput", () => {
 
   it("stringifies object tool input for Output.object text", () => {
     const content = materializeStructuredOutput([
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- gateway tool input is a parsed object; the model type says string
       {
         type: "tool-call",
         toolCallId: "1",

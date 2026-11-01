@@ -2,6 +2,7 @@ import { generateText, Output, tool } from "ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { resolveChatProvider } from "@/shared/chat-provider";
+import { CUSTOM_CHAT_SUBMIT_TOOL } from "./custom-chat-endpoint-middleware";
 import {
   buildChatAgentModel,
   buildChatAgentModelFromResolved,
@@ -11,6 +12,8 @@ const topicSchema = z.object({ topic: z.string() });
 
 const requestSchema = z.object({
   model: z.string(),
+  temperature: z.number().optional(),
+  tool_choice: z.string().optional(),
   response_format: z
     .object({
       type: z.string(),
@@ -28,6 +31,30 @@ function completion(content: string) {
       {
         message: { role: "assistant", content },
         finish_reason: "stop",
+      },
+    ],
+  });
+}
+
+function submitToolCompletion(payload: unknown) {
+  return Response.json({
+    choices: [
+      {
+        message: {
+          role: "assistant",
+          content: null,
+          tool_calls: [
+            {
+              id: "call_1",
+              type: "function",
+              function: {
+                name: CUSTOM_CHAT_SUBMIT_TOOL,
+                arguments: JSON.stringify(payload),
+              },
+            },
+          ],
+        },
+        finish_reason: "tool_calls",
       },
     ],
   });
@@ -80,7 +107,7 @@ async function objectCall(modelId: string, content: string) {
 
 describe("custom base URL structured output", () => {
   it.each(["claude-sonnet-5-5", "gpt-4o-mini"])(
-    "asks %s for json_object and parses plain JSON",
+    "asks %s to submit a tool and parses plain JSON text",
     async (modelId) => {
       const { result, body, url, calls } = await objectCall(
         modelId,
@@ -90,7 +117,12 @@ describe("custom base URL structured output", () => {
       expect(calls).toBe(1);
       expect(url).toBe("https://api.ooapi.cc/v1/chat/completions");
       expect(body.model).toBe(modelId);
-      expect(body.response_format).toEqual({ type: "json_object" });
+      expect(body.response_format).toBeUndefined();
+      expect(body.temperature).toBeUndefined();
+      expect(body.tool_choice).toBe("auto");
+      expect(body.tools?.map((entry) => entry.function.name)).toEqual([
+        CUSTOM_CHAT_SUBMIT_TOOL,
+      ]);
       expect(result.output).toEqual({ topic: "seo" });
     },
   );
@@ -102,17 +134,29 @@ describe("custom base URL structured output", () => {
     );
 
     expect(body.model).toBe("claude-sonnet-5-5");
-    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.response_format).toBeUndefined();
+    expect(body.tools?.map((entry) => entry.function.name)).toEqual([
+      CUSTOM_CHAT_SUBMIT_TOOL,
+    ]);
     expect(result.output).toEqual({ topic: "seo" });
   });
 
-  it("parses JSON wrapped in a fence and a sentence", async () => {
-    const { result, body } = await objectCall(
-      "claude-sonnet-5-5",
-      'Draft:\n\n```json\n{"topic":"rank tracker"}\n```\nDone.',
+  it("parses submit-tool arguments as the object", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(submitToolCompletion({ topic: "rank tracker" }));
+    const result = await generateText({
+      model: customModel("claude-sonnet-5-5"),
+      output: Output.object({ schema: topicSchema }),
+      prompt: "hi",
+      maxRetries: 0,
+    });
+    const body = requestSchema.parse(
+      JSON.parse(z.string().parse(fetchMock.mock.calls[0]?.[1]?.body)),
     );
 
-    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.response_format).toBeUndefined();
+    expect(body.tool_choice).toBe("auto");
     expect(result.output).toEqual({ topic: "rank tracker" });
   });
 
@@ -128,7 +172,7 @@ describe("custom base URL structured output", () => {
     ).rejects.toThrow(/could not parse the response/);
   });
 
-  it("keeps tool definitions beside json_object", async () => {
+  it("keeps caller tools beside the submit tool", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(completion('{"topic":"seo"}'));
@@ -149,9 +193,11 @@ describe("custom base URL structured output", () => {
       JSON.parse(z.string().parse(fetchMock.mock.calls[0]?.[1]?.body)),
     );
 
-    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(body.response_format).toBeUndefined();
+    expect(body.tool_choice).toBe("auto");
     expect(body.tools?.map((entry) => entry.function.name)).toEqual([
       "search_competitors",
+      CUSTOM_CHAT_SUBMIT_TOOL,
     ]);
   });
 

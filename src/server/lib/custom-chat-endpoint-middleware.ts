@@ -1,10 +1,17 @@
 import type {
-  LanguageModelV3CallOptions,
-  LanguageModelV3Content,
-  LanguageModelV3ToolChoice,
-} from "@ai-sdk/provider";
-import type { LanguageModelV3Prompt } from "@openrouter/ai-sdk-provider";
+  LanguageModelV3,
+  LanguageModelV3Prompt,
+} from "@openrouter/ai-sdk-provider";
 import type { LanguageModelMiddleware } from "ai";
+
+// @openrouter/ai-sdk-provider re-exports LanguageModelV3 only. Call and
+// content shapes are derived from that interface, same as chatAgent.ts.
+type LanguageModelV3CallOptions = Parameters<LanguageModelV3["doGenerate"]>[0];
+type GenerateResult = Awaited<ReturnType<LanguageModelV3["doGenerate"]>>;
+type LanguageModelV3Content = GenerateResult["content"][number];
+type LanguageModelV3ToolChoice = NonNullable<
+  LanguageModelV3CallOptions["toolChoice"]
+>;
 
 /** Tool name mid-proxies call for structured Output.object results. */
 export const CUSTOM_CHAT_SUBMIT_TOOL = "openseo_submit_structured_output";
@@ -22,12 +29,17 @@ export function customChatEndpointMiddleware(): LanguageModelMiddleware {
   return {
     specificationVersion: "v3",
     transformParams: async ({ params }) => softenCustomEndpointParams(params),
-    wrapGenerate: async ({ doGenerate }) => {
+    wrapGenerate: async ({ doGenerate, params }) => {
       const result = await doGenerate();
       const hadSubmit = hasSubmitToolCall(result.content);
+      // Only rewrite structured turns. A normal chat reply can be a fenced
+      // code sample; stripping that fence would show the raw body instead.
+      const structured = hadSubmit || requestsStructuredSubmit(params);
       return {
         ...result,
-        content: materializeStructuredOutput(result.content),
+        content: structured
+          ? materializeStructuredOutput(result.content)
+          : result.content,
         // AI SDK 6 only runs Output.object parse when finishReason === "stop"
         // (compares the unified field after mapping). V3 finishReason is an
         // object { unified, raw }, not a bare string.
@@ -49,7 +61,12 @@ export function softenCustomEndpointParams(
   const format = next.responseFormat;
   if (format?.type === "json" && format.schema) {
     const tools = [...(next.tools ?? [])];
-    if (!tools.some((tool) => tool.type === "function" && tool.name === CUSTOM_CHAT_SUBMIT_TOOL)) {
+    if (
+      !tools.some(
+        (tool) =>
+          tool.type === "function" && tool.name === CUSTOM_CHAT_SUBMIT_TOOL,
+      )
+    ) {
       tools.push({
         type: "function",
         name: CUSTOM_CHAT_SUBMIT_TOOL,
@@ -94,20 +111,34 @@ export function materializeStructuredOutput(
   );
 }
 
-
 function asStopFinishReason(
-  finishReason: { unified: string; raw?: string | undefined } | string | undefined,
+  finishReason:
+    | { unified: string; raw?: string | undefined }
+    | string
+    | undefined,
 ): { unified: "stop"; raw: string | undefined } {
   if (finishReason && typeof finishReason === "object") {
     return { unified: "stop", raw: finishReason.raw };
   }
-  return { unified: "stop", raw: typeof finishReason === "string" ? finishReason : undefined };
+  return {
+    unified: "stop",
+    raw: typeof finishReason === "string" ? finishReason : undefined,
+  };
 }
 
 function hasSubmitToolCall(content: LanguageModelV3Content[]): boolean {
   return content.some(
     (part) =>
       part.type === "tool-call" && part.toolName === CUSTOM_CHAT_SUBMIT_TOOL,
+  );
+}
+
+function requestsStructuredSubmit(params: LanguageModelV3CallOptions): boolean {
+  return (
+    params.tools?.some(
+      (tool) =>
+        tool.type === "function" && tool.name === CUSTOM_CHAT_SUBMIT_TOOL,
+    ) ?? false
   );
 }
 
@@ -121,7 +152,9 @@ function softenToolChoice(
   return toolChoice;
 }
 
-function withSubmitInstruction(prompt: LanguageModelV3Prompt): LanguageModelV3Prompt {
+function withSubmitInstruction(
+  prompt: LanguageModelV3Prompt,
+): LanguageModelV3Prompt {
   const first = prompt[0];
   if (first?.role === "system") {
     if (first.content.includes(CUSTOM_CHAT_SUBMIT_TOOL)) return prompt;
