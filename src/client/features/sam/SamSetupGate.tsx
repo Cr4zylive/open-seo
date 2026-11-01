@@ -30,10 +30,10 @@ export function SamSetupGate({
             </p>
           ) : (
             <p>
-              SAM 是 OpenSEO 的应用内 AI 智能体，需要 OpenRouter API 密钥。在
-              OpenRouter 创建密钥，设为{" "}
-              <code>OPENROUTER_API_KEY</code>{" "}
-              环境变量，重启 OpenSEO，然后在这里确认。
+              SAM 是 OpenSEO 的应用内 AI 智能体。请在设置里填写聊天 API
+              Key。使用 OpenAI 兼容接口时，Chat Base URL 填带{" "}
+              <code>/v1</code> 的地址（例如 <code>https://api.ooapi.cc/v1</code>
+              ），模型 id 填该网关要求的名字。保存后在这里确认。
             </p>
           )}
           <p className="text-xs">

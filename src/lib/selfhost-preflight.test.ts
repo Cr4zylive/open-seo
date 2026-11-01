@@ -59,4 +59,45 @@ describe("runSelfhostPreflight", () => {
     expect(itemFor(result, "Search Console")?.level).toBe("warn");
     expect(itemFor(result, "Search Console")?.message).toContain("32");
   });
+
+  it("fails hosted mode listing every missing variable", () => {
+    const result = runSelfhostPreflight({
+      AUTH_MODE: "hosted",
+      BETTER_AUTH_SECRET: "x".repeat(40),
+    });
+
+    expect(result.failed).toBe(true);
+    const item = itemFor(result, "AUTH_MODE");
+    expect(item?.message).toContain("BETTER_AUTH_URL");
+    expect(item?.message).toContain("GOOGLE_CLIENT_ID");
+    expect(item?.message).not.toContain("BETTER_AUTH_SECRET,");
+  });
+
+  it("treats a custom chat base URL as configured AI, and warns without a model id", () => {
+    const configured = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      CHAT_BASE_URL: "https://api.ooapi.cc/v1",
+      OPENROUTER_MODEL: "gpt-4o-mini",
+    });
+    expect(itemFor(configured, "AI features")?.level).toBe("ok");
+    expect(itemFor(configured, "AI features")?.message).toContain(
+      "until chat settings are saved",
+    );
+
+    const missingModel = runSelfhostPreflight({
+      AUTH_MODE: "local_noauth",
+      OPENROUTER_BASE_URL: "https://api.ooapi.cc/v1",
+    });
+    expect(itemFor(missingModel, "AI features")?.level).toBe("warn");
+    expect(itemFor(missingModel, "AI features")?.message).toContain(
+      "OPENROUTER_MODEL",
+    );
+  });
+
+  it("mentions ALLOWED_HOST when unset", () => {
+    const result = runSelfhostPreflight({ AUTH_MODE: "local_noauth" });
+
+    expect(itemFor(result, "ALLOWED_HOST")?.level).toBe("info");
+    expect(itemFor(result, "ALLOWED_HOST")?.message).toContain("reverse proxy");
+  });
 });

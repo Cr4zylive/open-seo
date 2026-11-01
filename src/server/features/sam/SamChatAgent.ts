@@ -31,7 +31,12 @@ import {
   SamTelemetry,
   type SamTurnStats,
 } from "@/server/features/sam/samTurnTelemetry";
-import { buildSamChatModel } from "@/server/lib/openrouter";
+import { resolveRuntimeChatProvider } from "@/server/features/chat-provider/services/ChatProviderService";
+import {
+  buildChatAgentModelFromResolved,
+  buildSamChatModel,
+  getOpenRouterAccess,
+} from "@/server/lib/openrouter";
 import {
   isHostedServerAuthMode,
   usesBetterAuthServer,
@@ -188,12 +193,20 @@ export class SamChatAgent extends Think {
     return super.fetch(request);
   }
 
+  // Think calls this before beforeTurn. The turn uses the model beforeTurn
+  // returns, after saved chat settings (or the env / gateway fallback) load.
   getModel() {
-    return this.buildModel("max");
+    return staticAssistantModel("SAM is loading its chat settings.");
   }
 
-  private buildModel(reasoningEffort: "max" | "low") {
-    return buildSamChatModel(this.env, reasoningEffort);
+  private async chatModel(reasoningEffort: "max" | "low") {
+    return withPgClient(async () => {
+      const resolved = await resolveRuntimeChatProvider(this.env);
+      if (resolved.baseUrl || resolved.apiKey) {
+        return buildChatAgentModelFromResolved(resolved, reasoningEffort);
+      }
+      return buildSamChatModel(this.env, reasoningEffort);
+    });
   }
 
   override getSkills() {
@@ -226,7 +239,7 @@ export class SamChatAgent extends Think {
   // on the same model at low reasoning; their cost joins the turn's total.
   private async summarizeForCompaction(prompt: string): Promise<string> {
     const result = await generateText({
-      model: this.buildModel("low"),
+      model: await this.chatModel("low"),
       prompt,
     });
     this.recordSpend(openRouterCostUsd(result.providerMetadata));
@@ -306,6 +319,18 @@ export class SamChatAgent extends Think {
     this.turnMonthlyRemaining = null;
     const turn = this.telemetry.beginTurn(turnCtx.continuation);
     return withPgClient(async (): Promise<TurnConfig> => {
+      const resolved = await resolveRuntimeChatProvider(this.env);
+      if (
+        !resolved.apiKey &&
+        !resolved.baseUrl &&
+        !getOpenRouterAccess(this.env)
+      ) {
+        turn.refusal = "no_model";
+        return this.refusalTurn(
+          "请先在设置里填写聊天 API Key。使用 OpenAI 兼容接口时，再填写 Chat Base URL 和模型 id。",
+        );
+      }
+
       const ctx = await this.loadSamContext();
       if (!ctx) {
         turn.refusal = "no_session";
@@ -371,6 +396,7 @@ export class SamChatAgent extends Think {
       // Loaded per turn, not at startup: the tool schemas are costly to build.
       const samTools = await import("@/server/features/sam/samChatTools");
       return {
+        model: await this.chatModel("max"),
         tools: samTools.buildSamMcpTools(authContext, ctx.project, turn.turnId),
         // SAM runs complex multi-step work in one turn (site-read intake plus
         // a full research chain, multi-competitor sweeps), so the step budget

@@ -47,7 +47,9 @@ function OpenrouterApiKeyHelpPage() {
         <>
           OpenSEO 需要 <code>OPENROUTER_API_KEY</code> secret，SAM
           这类应用内 SEO 智能体才能运行。这是可选的——没有它，OpenSEO
-          的其他功能照常工作。
+          的其他功能照常工作。自托管也可以在「设置」里保存 Chat Base
+          URL、API Key 和模型 id，把 SAM
+          指到任意 OpenAI 兼容接口；环境变量只在第一次保存之前生效。
         </>
       }
       everyAppIntro="SAM、提示词建议和网站研究跑在 OpenRouter 上。在 Every App 上，网关为所有应用保存一次密钥。"

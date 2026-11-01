@@ -277,6 +277,10 @@ const dataEnv = {
   OPENROUTER_API_KEY: optionalSecret("OPENROUTER_API_KEY"),
   OPENROUTER_MODEL: optionalVar("OPENROUTER_MODEL"),
   CONTEXT_API_KEY: optionalSecret("CONTEXT_API_KEY"),
+  // Fallback until chat settings are saved in the app. Hosted SaaS leaves
+  // these empty and stays on the platform OpenRouter key.
+  CHAT_BASE_URL: optionalVar("CHAT_BASE_URL"),
+  OPENROUTER_BASE_URL: optionalVar("OPENROUTER_BASE_URL"),
   AUTUMN_SECRET_KEY: optionalSecret("AUTUMN_SECRET_KEY"),
   AUTUMN_WEBHOOK_SECRET: optionalSecret("AUTUMN_WEBHOOK_SECRET"),
   DUB_API_KEY: optionalSecret("DUB_API_KEY"),

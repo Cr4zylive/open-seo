@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ApiKeySettings } from "@/client/features/settings/ApiKeySettings";
 import { SectionHeader } from "@/client/components/PageHeader";
 import { ThemePreferenceRadio } from "@/client/components/ThemePreferenceMenuItems";
 import { everyAppAccountQueryOptions } from "@/client/features/every-app/everyAppAccountQueries";
+import { ApiKeySettings } from "@/client/features/settings/ApiKeySettings";
+import { ChatProviderSettings } from "@/client/features/settings/ChatProviderSettings";
 import { McpConnectionsSettings } from "@/client/features/settings/McpConnectionsSettings";
 import { PrivacySettings } from "@/client/features/settings/PrivacySettings";
 import {
@@ -41,15 +42,18 @@ function PersonalSettings() {
       {isHosted ? (
         <PrivacySettings />
       ) : (
-        <section className="space-y-3">
-          <SectionHeader title="关于" />
-          <div className="flex items-center justify-between gap-6">
-            <span className="text-sm">版本</span>
-            <span className="font-mono text-sm text-muted-foreground">
-              v{version}
-            </span>
-          </div>
-        </section>
+        <>
+          <ChatProviderSettings />
+          <section className="space-y-3">
+            <SectionHeader title="关于" />
+            <div className="flex items-center justify-between gap-6">
+              <span className="text-sm">版本</span>
+              <span className="font-mono text-sm text-muted-foreground">
+                v{version}
+              </span>
+            </div>
+          </section>
+        </>
       )}
     </div>
   );

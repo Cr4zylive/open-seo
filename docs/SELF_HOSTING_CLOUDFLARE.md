@@ -50,6 +50,10 @@ Copy the template and set `DATAFORSEO_API_KEY`; everything else is optional:
 cp deploy/.env.selfhost.example .env.selfhost
 ```
 
+SAM is optional. After the app is up, open Settings and save the chat model there: Chat Base URL (empty keeps OpenRouter; a custom OpenAI-compatible URL includes `/v1`, for example `https://api.ooapi.cc/v1`), the chat API key, and the model id that gateway expects. The model needs OpenAI-style tool calling. A custom endpoint does not report OpenRouter usage cost, so that spend stays 0.
+
+`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `CHAT_BASE_URL` in `.env.selfhost` are a fallback until that screen is saved. `OPENROUTER_BASE_URL` is an alias of `CHAT_BASE_URL` for the fallback.
+
 ## 4) Deploy
 
 ```bash

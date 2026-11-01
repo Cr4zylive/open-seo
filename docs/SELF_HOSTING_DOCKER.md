@@ -64,11 +64,14 @@ docker compose up -d --force-recreate init web crawl-gateway
 | `DATAFORSEO_API_KEY`                       | Base64-encoded `login:password`; keyword, backlink, rank and site data           |
 | `OPENROUTER_API_KEY`                       | SAM conversations, website research and summaries                                |
 | `OPENROUTER_MODEL`                         | Optional model override                                                          |
+| `CHAT_BASE_URL`                            | Optional OpenAI-compatible `/v1` origin for SAM, used only until Settings are saved |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Search Console and Analytics linking with your own Google OAuth app     |
 | `CONTEXT_API_KEY`                          | Optional JavaScript rendering for site audits                                    |
 | `GOOGLE_MAPS_API_KEY`                      | Optional map for Local SEO; see [`GOOGLE_MAPS_SETUP.md`](./GOOGLE_MAPS_SETUP.md) |
 
 For Google, register your own OAuth application with these redirect URLs under your public address: `/api/gsc/oauth/callback` for Search Console and `/api/ga4/oauth/callback` for Analytics. See [`SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md`](./SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md). Signing in with Google is not offered; accounts use email and password.
+
+SAM can also use any OpenAI-compatible chat API. After the app is running, open Settings and save Chat Base URL (include `/v1`, for example `https://api.ooapi.cc/v1`), the gateway's API key, and the model id that gateway expects. Leave the base URL empty to stay on OpenRouter. The model needs OpenAI-style tool calling. A custom endpoint does not return OpenRouter usage cost, so that spend is recorded as 0. `CHAT_BASE_URL`, `OPENROUTER_API_KEY`, and `OPENROUTER_MODEL` (`OPENROUTER_BASE_URL` is an alias of the base URL) apply only until those settings are saved.
 
 Site audits can crawl up to 10,000 pages (1,000 with JavaScript rendering), with no lifetime quota. Costs are what the providers charge, with no OpenSEO markup.
 

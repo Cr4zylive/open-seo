@@ -48,6 +48,8 @@ Copy the template and set `DATAFORSEO_API_KEY`; everything else is optional:
 cp deploy/.env.selfhost.example .env.selfhost
 ```
 
+SAM is optional. After deploy, save the chat model in the app under Settings. See [AI features](/docs/self-hosting#ai-features-sam).
+
 ## 4) Deploy
 
 ```bash
