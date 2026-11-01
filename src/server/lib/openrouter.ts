@@ -5,8 +5,8 @@ import {
   type OpenRouterProvider,
 } from "@openrouter/ai-sdk-provider";
 import { wrapLanguageModel } from "ai";
+import { customChatEndpointMiddleware } from "@/server/lib/custom-chat-endpoint-middleware";
 import { isEveryAppAuthMode } from "@/lib/auth-mode";
-import { wrapCompatibleStructuredOutput } from "@/server/lib/compatibleJsonOutput";
 import { gatewayCallFor } from "@/server/lib/gateway-attribution";
 import { getEnvValueSync, getWorkersEnv } from "@/server/lib/runtime-env";
 import {
@@ -142,14 +142,13 @@ async function openAiBlockedHere(): Promise<boolean> {
  *
  * Custom base URL: the same provider is pointed at that OpenAI-compatible
  * `/v1` origin (`POST {baseURL}/chat/completions`) with `compatibility:
- * "compatible"`. Claude on that path returns JSON inside a ```json fence,
- * which `Output.object` cannot parse. The wrapper strips the fence before
- * the SDK parse, and also downgrades `json_schema` to `json_object`. Model
- * id does not matter — Claude slugs and `gpt-4o-mini` take the same path.
- * Usage accounting, provider order/ZDR/fallbacks, the OpenAI region
- * fallback, and the OpenRouter reasoning channel are omitted — a generic
- * gateway does not honor them, and cost metering reads as 0 because no
- * OpenRouter usage cost comes back.
+ * "compatible"`. Usage accounting, provider order/ZDR/fallbacks, the OpenAI
+ * region fallback, and the OpenRouter reasoning channel are omitted — a
+ * generic gateway does not honor them, and cost metering reads as 0 because
+ * no OpenRouter usage cost comes back. Requests also go through
+ * `customChatEndpointMiddleware`: mid-proxies that reject non-default
+ * temperature / forced tool_choice, or wrap json_schema in markdown fences,
+ * get a soft structured-output path so `Output.object` still parses.
  *
  * Sync on purpose: Think's `getModel()` hook is sync and runs on every turn,
  * so the SAM agent reads its access/model from its DO env and builds here.
@@ -164,13 +163,14 @@ export function buildChatAgentModel(
   const endpoint = baseURL?.trim();
   if (endpoint && "apiKey" in access) {
     const bearer = access.apiKey.trim() || CUSTOM_ENDPOINT_BEARER_FALLBACK;
-    return wrapCompatibleStructuredOutput(
-      createOpenRouter({
+    return wrapLanguageModel({
+      model: createOpenRouter({
         apiKey: bearer,
         baseURL: endpoint,
         compatibility: "compatible",
       })(model),
-    );
+      middleware: customChatEndpointMiddleware(),
+    });
   }
 
   const openrouter =
