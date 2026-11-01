@@ -6,6 +6,7 @@ import {
 } from "@openrouter/ai-sdk-provider";
 import { wrapLanguageModel } from "ai";
 import { isEveryAppAuthMode } from "@/lib/auth-mode";
+import { wrapCompatibleStructuredOutput } from "@/server/lib/compatibleJsonOutput";
 import { gatewayCallFor } from "@/server/lib/gateway-attribution";
 import { getEnvValueSync, getWorkersEnv } from "@/server/lib/runtime-env";
 import {
@@ -141,10 +142,14 @@ async function openAiBlockedHere(): Promise<boolean> {
  *
  * Custom base URL: the same provider is pointed at that OpenAI-compatible
  * `/v1` origin (`POST {baseURL}/chat/completions`) with `compatibility:
- * "compatible"`. Usage accounting, provider order/ZDR/fallbacks, the OpenAI
- * region fallback, and the OpenRouter reasoning channel are omitted — a
- * generic gateway does not honor them, and cost metering reads as 0 because
- * no OpenRouter usage cost comes back.
+ * "compatible"`. `Output.object` would otherwise send `json_schema` with
+ * `strict: true`; the wrapper downgrades that to `json_object` and extracts
+ * JSON from fenced or messy replies before Zod checks the object. Model id
+ * does not matter — Claude slugs and `gpt-4o-mini` take the same path.
+ * Usage accounting, provider order/ZDR/fallbacks, the OpenAI region
+ * fallback, and the OpenRouter reasoning channel are omitted — a generic
+ * gateway does not honor them, and cost metering reads as 0 because no
+ * OpenRouter usage cost comes back.
  *
  * Sync on purpose: Think's `getModel()` hook is sync and runs on every turn,
  * so the SAM agent reads its access/model from its DO env and builds here.
@@ -159,11 +164,13 @@ export function buildChatAgentModel(
   const endpoint = baseURL?.trim();
   if (endpoint && "apiKey" in access) {
     const bearer = access.apiKey.trim() || CUSTOM_ENDPOINT_BEARER_FALLBACK;
-    return createOpenRouter({
-      apiKey: bearer,
-      baseURL: endpoint,
-      compatibility: "compatible",
-    })(model);
+    return wrapCompatibleStructuredOutput(
+      createOpenRouter({
+        apiKey: bearer,
+        baseURL: endpoint,
+        compatibility: "compatible",
+      })(model),
+    );
   }
 
   const openrouter =
