@@ -8,25 +8,18 @@ import {
   type BillingCustomerContext,
 } from "@/server/billing/subscription";
 import { assertPaidAiSearchPlan } from "@/server/features/ai-search/services/access";
+import { requireChatAgentModel } from "@/server/features/chat-provider/services/ChatAgentModelService";
 import { ProjectContextRepository } from "@/server/features/project-context/repositories/ProjectContextRepository";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
-import { requireOpenRouterCostUsd } from "@/server/lib/chatAgent";
+import { openRouterCostUsd } from "@/server/lib/chatAgent";
 import {
   CHATGPT_LANGUAGE_CODE,
   CHATGPT_LOCATION_CODE,
   createDataforseoClient,
 } from "@/server/lib/dataforseo";
 import { AppError } from "@/server/lib/errors";
-import {
-  buildChatAgentModel,
-  requireOpenRouterAccess,
-  type OpenRouterAccess,
-} from "@/server/lib/openrouter";
 import { buildCacheKey, getCached, setCached } from "@/server/lib/r2-cache";
-import {
-  getOptionalEnvValue,
-  isHostedServerAuthMode,
-} from "@/server/lib/runtime-env";
+import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { normalizeAiSuggestion } from "@/shared/ai-prompt-suggestions";
 import {
   AI_DEFAULT_TOPIC,
@@ -100,7 +93,6 @@ export async function researchAiPrompts(
       "INSUFFICIENT_CREDITS",
       "You need usage credits to research prompts.",
     );
-  const openRouter = await requireOpenRouterAccess();
   const state = await getTracker({ projectId: input.projectId });
   const keyword = normalizeAiSuggestion(input.keyword);
   // DataForSEO has ChatGPT prompt data only in US English.
@@ -124,7 +116,6 @@ export async function researchAiPrompts(
       projectId: input.projectId,
       keyword,
       prompts: loaded.prompts,
-      openRouter,
     },
     customer,
   );
@@ -226,7 +217,6 @@ async function relevantQuestions(
     projectId: string;
     keyword: string;
     prompts: CachedPrompt[];
-    openRouter: OpenRouterAccess;
   },
   customer: BillingCustomerContext,
 ): Promise<Set<string>> {
@@ -260,11 +250,7 @@ async function relevantQuestions(
   if (cached.success) return new Set(cached.data);
 
   const result = await generateText({
-    model: buildChatAgentModel(
-      input.openRouter,
-      await getOptionalEnvValue("OPENROUTER_MODEL"),
-      "low",
-    ),
+    model: await requireChatAgentModel("low"),
     output: Output.object({ schema: relevanceOutputSchema }),
     maxOutputTokens: 4000,
     abortSignal: AbortSignal.timeout(60_000),
@@ -273,7 +259,7 @@ async function relevantQuestions(
     prompt,
     // Admitted above, so settle the actual cost even if credits ran out since.
     onStepFinish: async (step) => {
-      const costUsd = requireOpenRouterCostUsd(step.providerMetadata);
+      const costUsd = openRouterCostUsd(step.providerMetadata);
       await billResearchSpend({ ...customer, projectId: input.projectId }, [
         {
           provider: "openrouter",
