@@ -12,6 +12,7 @@ const {
   getCached,
   getTracker,
   listResearchKeywords,
+  requireChatAgentModel,
 } = vi.hoisted(() => ({
   assertPaidPlan: vi.fn(),
   mentionsSearch: vi.fn(),
@@ -22,22 +23,22 @@ const {
   getCached: vi.fn(),
   getTracker: vi.fn(),
   listResearchKeywords: vi.fn(),
+  requireChatAgentModel: vi.fn(),
 }));
 
 vi.mock("ai", () => ({
   generateText,
   Output: { object: (value: unknown) => value },
 }));
-vi.mock("@/server/lib/openrouter", () => ({
-  buildChatAgentModel: vi.fn(),
-  requireOpenRouterAccess: async () => ({ apiKey: "key" }),
-}));
+vi.mock(
+  "@/server/features/chat-provider/services/ChatAgentModelService",
+  () => ({ requireChatAgentModel }),
+);
 vi.mock("@/server/lib/chatAgent", () => ({
-  requireOpenRouterCostUsd: () => 0.003,
+  openRouterCostUsd: () => 0.003,
 }));
 vi.mock("@/server/lib/runtime-env", () => ({
   getRequiredEnvValue: async () => "key",
-  getOptionalEnvValue: vi.fn(),
   isHostedServerAuthMode: isHosted,
 }));
 vi.mock("@/server/billing/researchSpend", () => ({ billResearchSpend }));
@@ -73,12 +74,14 @@ import { listAiResearchKeywords, researchAiPrompts } from "./aiPromptResearch";
 import { customer } from "./aiVisibilityTestFixtures";
 
 const input = { projectId: "project", keyword: "seo tool" } as const;
+const chatModel = { modelId: "saved-chat-model" };
 
 describe("researchAiPrompts", () => {
   beforeEach(() => {
     assertPaidPlan.mockResolvedValue(undefined);
     isHosted.mockResolvedValue(true);
     creditsDepleted.mockResolvedValue({ depleted: false });
+    requireChatAgentModel.mockResolvedValue(chatModel);
     getCached.mockResolvedValue(null);
     getTracker.mockResolvedValue({
       brands: [
@@ -137,6 +140,12 @@ describe("researchAiPrompts", () => {
       },
       { text: "Is moz a good seo tool?", tracked: true, sources: [] },
     ]);
+    expect(requireChatAgentModel).toHaveBeenCalledWith("low");
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: chatModel,
+      }),
+    );
     expect(billResearchSpend).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: "project" }),
       [expect.objectContaining({ provider: "openrouter", costUsd: 0.003 })],

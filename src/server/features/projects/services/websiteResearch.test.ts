@@ -8,6 +8,7 @@ const {
   listSections,
   listCompetitors,
   listKeywords,
+  requireChatAgentModel,
 } = vi.hoisted(() => ({
   generateText: vi.fn(),
   readSite: vi.fn(),
@@ -15,6 +16,7 @@ const {
   listSections: vi.fn(),
   listCompetitors: vi.fn(),
   listKeywords: vi.fn(),
+  requireChatAgentModel: vi.fn(),
 }));
 vi.mock("ai", async (importOriginal) => ({
   NoObjectGeneratedError: (await importOriginal<typeof Ai>())
@@ -26,16 +28,12 @@ vi.mock("ai", async (importOriginal) => ({
 }));
 vi.mock("@/server/lib/scrape", () => ({ readSite }));
 vi.mock("@/server/lib/dataforseo/serp", () => ({ fetchLiveSerp: search }));
-vi.mock("@/server/lib/runtime-env", () => ({
-  getRequiredEnvValue: vi.fn(),
-  getOptionalEnvValue: vi.fn(),
-}));
-vi.mock("@/server/lib/openrouter", () => ({
-  buildChatAgentModel: vi.fn(),
-  requireOpenRouterAccess: vi.fn(async () => ({ apiKey: "test-key" })),
-}));
+vi.mock(
+  "@/server/features/chat-provider/services/ChatAgentModelService",
+  () => ({ requireChatAgentModel }),
+);
 vi.mock("@/server/lib/chatAgent", () => ({
-  requireOpenRouterCostUsd: vi.fn(),
+  openRouterCostUsd: vi.fn(),
 }));
 vi.mock("@/server/billing/researchSpend", () => ({
   billResearchSpend: vi.fn(),
@@ -55,6 +53,7 @@ import { billResearchSpend } from "@/server/billing/researchSpend";
 import { AppError } from "@/server/lib/errors";
 import { customer } from "@/server/features/ai-visibility/services/aiVisibilityTestFixtures";
 
+const chatModel = { modelId: "saved-chat-model" };
 const project = {
   id: "project",
   name: "Saved brand",
@@ -96,6 +95,7 @@ beforeEach(() => {
     { domain: "saved-rival.com", name: "Saved rival", notes: "User notes" },
   ]);
   listKeywords.mockResolvedValue(["saved keyword"]);
+  requireChatAgentModel.mockResolvedValue(chatModel);
   readSite.mockResolvedValue({ pages: [{ url: competitor.sourceUrl }] });
   search.mockResolvedValue({ billing: { costUsd: 0.002 }, data: [] });
   generateText.mockImplementation(
@@ -180,6 +180,12 @@ describe("researchWebsite", () => {
       if (field === "competitors") expect(search).toHaveBeenCalledOnce();
       else expect(search).not.toHaveBeenCalled();
       if (field === "keywords") expect(readSite).not.toHaveBeenCalled();
+      expect(requireChatAgentModel).toHaveBeenCalledWith("low");
+      expect(generateText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: chatModel,
+        }),
+      );
     },
   );
 
