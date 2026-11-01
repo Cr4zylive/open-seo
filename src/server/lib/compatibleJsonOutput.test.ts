@@ -10,6 +10,9 @@ describe("extractProxyJsonText", () => {
     expect(extractProxyJsonText('```json\n{"topic":"rank tracker"}\n```')).toBe(
       '{"topic":"rank tracker"}',
     );
+    expect(extractProxyJsonText('```json\n{\n  "topic": "seo"\n}\n```')).toBe(
+      '{\n  "topic": "seo"\n}',
+    );
   });
 
   it("pulls the object out of prose and a fence", () => {

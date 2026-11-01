@@ -6,16 +6,16 @@ import {
 } from "ai";
 
 /**
- * Custom OpenAI-compatible endpoints (OOAPI and other proxies) receive
- * `Output.object` as
- * `response_format: { type: "json_schema", json_schema: { strict: true } }`.
- * Those proxies often answer with prose or a markdown fence, and the AI SDK
- * then throws `No object generated: could not parse the response`.
+ * OOAPI's Claude models return valid JSON wrapped in a ```json fence.
+ * `Output.object` parses that text with `secureJsonParse` and does not
+ * remove the fence, so every call throws
+ * `No object generated: could not parse the response`.
  *
- * This wrapper is only for that custom base URL path. It asks for
- * `json_object` instead, then extracts JSON from the reply. Zod validation
- * in `Output.object` still runs on the extracted text. Ordinary chat turns
- * are not rewritten.
+ * On a custom base URL this wrapper strips the fence (and any surrounding
+ * prose) before that parse. It also downgrades `json_schema` to
+ * `json_object`. Zod still checks the object. Ordinary chat turns, including
+ * fenced code samples, are left as written. Do not set temperature here:
+ * OOAPI rejects `temperature: 0` for `claude-sonnet-5-5`.
  */
 export function wrapCompatibleStructuredOutput(
   model: LanguageModelV3,

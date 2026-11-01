@@ -142,10 +142,10 @@ async function openAiBlockedHere(): Promise<boolean> {
  *
  * Custom base URL: the same provider is pointed at that OpenAI-compatible
  * `/v1` origin (`POST {baseURL}/chat/completions`) with `compatibility:
- * "compatible"`. `Output.object` would otherwise send `json_schema` with
- * `strict: true`; the wrapper downgrades that to `json_object` and extracts
- * JSON from fenced or messy replies before Zod checks the object. Model id
- * does not matter — Claude slugs and `gpt-4o-mini` take the same path.
+ * "compatible"`. Claude on that path returns JSON inside a ```json fence,
+ * which `Output.object` cannot parse. The wrapper strips the fence before
+ * the SDK parse, and also downgrades `json_schema` to `json_object`. Model
+ * id does not matter — Claude slugs and `gpt-4o-mini` take the same path.
  * Usage accounting, provider order/ZDR/fallbacks, the OpenAI region
  * fallback, and the OpenRouter reasoning channel are omitted — a generic
  * gateway does not honor them, and cost metering reads as 0 because no

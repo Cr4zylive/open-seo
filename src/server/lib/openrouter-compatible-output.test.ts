@@ -95,6 +95,17 @@ describe("custom base URL structured output", () => {
     },
   );
 
+  it("parses a Claude reply that is only a json fence", async () => {
+    const { result, body } = await objectCall(
+      "claude-sonnet-5-5",
+      '```json\n{\n  "topic": "seo"\n}\n```',
+    );
+
+    expect(body.model).toBe("claude-sonnet-5-5");
+    expect(body.response_format).toEqual({ type: "json_object" });
+    expect(result.output).toEqual({ topic: "seo" });
+  });
+
   it("parses JSON wrapped in a fence and a sentence", async () => {
     const { result, body } = await objectCall(
       "claude-sonnet-5-5",
